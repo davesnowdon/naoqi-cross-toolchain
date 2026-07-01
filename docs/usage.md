@@ -33,8 +33,19 @@ cmake --build build -j
 
 Dependencies you cross-build into a staging prefix are found via
 `-DCMAKE_PREFIX_PATH=/path/to/stage`. The toolchain file defaults to the old C++
-ABI, so gRPC/protobuf/abseil built through it link against the NAOqi/boost/Qt/OpenCV
-libraries from the original ctc.
+ABI, so gRPC/protobuf/abseil built through it are ABI-compatible with the NAO's
+existing C++ libraries.
+
+> **This toolchain bundles only the compiler + glibc-2.13 sysroot — not NAOqi,
+> boost, Qt or OpenCV.** To build/link against those, point at the copies in the
+> **original Aldebaran ctc** — e.g. add them to `CMAKE_PREFIX_PATH`, or overlay
+> this `cross/` directory into a copy of the original ctc so its bundled packages
+> sit alongside. The old-ABI default is what makes that linking work.
+
+`.pc` files inside the sysroot are resolved by the generated
+`cross/bin/i686-aldebaran-linux-gnu-pkg-config` wrapper (it sets
+`PKG_CONFIG_SYSROOT_DIR`/`PKG_CONFIG_LIBDIR` and delegates to the host
+`pkg-config`); `cross-config.cmake` wires it into `pkg_check_modules`.
 
 ### Cross-building gRPC
 
@@ -55,6 +66,13 @@ Abseil and protobuf are verified to cross-build with this toolchain out of the b
 qitoolchain create nao-modern /path/to/ctc/toolchain.xml
 qibuild configure -c nao-modern
 ```
+
+`toolchain.xml` registers the **cross compiler + sysroot** only (it deliberately
+does not list NAOqi/boost/Qt/OpenCV packages, which this artifact does not ship).
+To build a project that needs the NAO libraries, also feed qibuild the original
+ctc's packages — the simplest route is to overlay this `cross/` directory into a
+copy of the original Aldebaran ctc and register that ctc's `toolchain.xml`, which
+already lists them.
 
 ## C++ ABI switch
 

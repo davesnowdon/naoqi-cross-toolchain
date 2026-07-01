@@ -30,6 +30,13 @@ GCC_VER=14.3.0
 GDB_VER=16.3
 CTC_NAME=ctc-linux64-atom-2.1.4.14-modern
 
+# Pinned upstream checksums (ftp.gnu.org) — verified before extraction so the
+# build is reproducible and does not blindly trust the network/cache. The GCC
+# prerequisites (gmp/mpfr/mpc/isl) are checksum-verified by download_prerequisites.
+BINUTILS_SHA256=ce2017e059d63e67ddb9240e9d4ec49c2893605035cd60e92ad53177f4377237
+GCC_SHA256=e0dc77297625631ac8e50fa92fffefe899a4eb702592da5c32ef04e2293aca3a
+GDB_SHA256=bcfcd095528a987917acf9fff3f1672181694926cc18d609c99d0042c00224c5
+
 HERE="$(cd "$(dirname "$0")" && pwd)"                 # repo root
 OUT="${OUT:-$HERE/output/$CTC_NAME}"                  # assembled toolchain
 PREFIX="$OUT/cross"                                   # mirrors original ctc layout
@@ -50,18 +57,28 @@ export PATH="$PREFIX/bin:$PATH"
 mkdir -p "$SRC" "$OBJ"
 
 msg(){ echo "[$(date +%T)] $*"; }
+# verify_sha256 <file> <expected-hash>
+verify_sha256(){ echo "$2  $1" | sha256sum -c - >/dev/null \
+  || { echo "FATAL: checksum mismatch for $1" >&2; exit 1; }; }
+# fetch <url> <sha256>: download if missing, then verify
+fetch(){ local f; f="$(basename "$1")"; [ -f "$f" ] || wget -q "$1"; verify_sha256 "$f" "$2"; }
 
-# ---- 0. fetch sources + unpack the reused glibc-2.13 sysroot ----------------
+# ---- 0. fetch (checksum-verified) sources + unpack the reused sysroot --------
 cd "$SRC"
-[ -f binutils-$BINUTILS_VER.tar.xz ] || wget -q https://ftp.gnu.org/gnu/binutils/binutils-$BINUTILS_VER.tar.xz
-[ -f gcc-$GCC_VER.tar.xz ]          || wget -q https://ftp.gnu.org/gnu/gcc/gcc-$GCC_VER/gcc-$GCC_VER.tar.xz
-[ -f gdb-$GDB_VER.tar.xz ]          || wget -q https://ftp.gnu.org/gnu/gdb/gdb-$GDB_VER.tar.xz
+fetch https://ftp.gnu.org/gnu/binutils/binutils-$BINUTILS_VER.tar.xz "$BINUTILS_SHA256"
+fetch https://ftp.gnu.org/gnu/gcc/gcc-$GCC_VER/gcc-$GCC_VER.tar.xz    "$GCC_SHA256"
+fetch https://ftp.gnu.org/gnu/gdb/gdb-$GDB_VER.tar.xz                 "$GDB_SHA256"
 [ -d binutils-$BINUTILS_VER ] || tar xf binutils-$BINUTILS_VER.tar.xz
 [ -d gcc-$GCC_VER ]          || { tar xf gcc-$GCC_VER.tar.xz; ( cd gcc-$GCC_VER && ./contrib/download_prerequisites ); }
 [ -d gdb-$GDB_VER ]          || tar xf gdb-$GDB_VER.tar.xz
 
 if [ ! -e "$REUSE/sysroot/lib/libc-2.13.so" ]; then
-  msg "unpacking reuse blob $REUSE_TARBALL"
+  msg "verifying + unpacking reuse blob $REUSE_TARBALL"
+  if [ -f "$REUSE_TARBALL.sha256" ]; then
+    ( cd "$(dirname "$REUSE_TARBALL")" && sha256sum -c "$(basename "$REUSE_TARBALL").sha256" )
+  else
+    echo "warning: no $REUSE_TARBALL.sha256 to verify against" >&2
+  fi
   rm -rf "$REUSE"; mkdir -p "$REUSE"
   tar -C "$REUSE" -xf "$REUSE_TARBALL"
 fi
@@ -120,23 +137,38 @@ for pat in 'libstdc++.so.6*' 'libgcc_s.so.1' 'libatomic.so.1*' 'libgomp.so.1*'; 
   find "$PREFIX/$TARGET/lib" -maxdepth 1 -name "$pat" ! -name '*-gdb.py' -exec cp -a {} "$RT/" \;
 done
 
-# ---- 5. assemble the drop-in ctc (integration files + tests) ----------------
+# ---- 5. sysroot-aware pkg-config wrapper ------------------------------------
+# cross-config.cmake points at <tuple>-pkg-config; generate it so pkg_check_modules
+# resolves .pc files inside the sysroot (needs a host pkg-config to delegate to).
+msg "installing $TARGET-pkg-config wrapper"
+cat > "$PREFIX/bin/$TARGET-pkg-config" <<EOF
+#!/bin/sh
+# Sysroot-aware pkg-config for the NAO cross toolchain (delegates to host pkg-config).
+here="\$(cd "\$(dirname "\$0")" && pwd)"
+sysroot="\$here/../$TARGET/sysroot"
+export PKG_CONFIG_SYSROOT_DIR="\$sysroot"
+export PKG_CONFIG_LIBDIR="\$sysroot/usr/lib/pkgconfig:\$sysroot/usr/lib/$TARGET/pkgconfig:\$sysroot/usr/share/pkgconfig"
+exec pkg-config "\$@"
+EOF
+chmod +x "$PREFIX/bin/$TARGET-pkg-config"
+
+# ---- 6. assemble the drop-in ctc (integration files + tests) ----------------
 msg "assembling toolchain integration files"
 cp -a "$HERE/toolchain-files/." "$OUT/"
 mkdir -p "$OUT/tests"; cp -a "$HERE/tests/verify-toolchain.sh" "$OUT/tests/"
 [ -f "$HERE/README.md" ] && cp -a "$HERE/README.md" "$OUT/README.md"
 
-# ---- 6. strip host executables (safe; big size win) -------------------------
+# ---- 7. strip host executables (safe; big size win) -------------------------
 msg "stripping host executables"
 find "$PREFIX/bin" "$PREFIX/libexec" -type f -print0 \
   | xargs -0 -n1 -P"$JOBS" strip --strip-unneeded 2>/dev/null || true
 
-# ---- 7. package -------------------------------------------------------------
+# ---- 8. package -------------------------------------------------------------
 msg "packaging $CTC_NAME.tar.xz"
 tar -C "$(dirname "$OUT")" -cf - "$(basename "$OUT")" | xz -6 -T0 > "$OUT.tar.xz"
 ( cd "$(dirname "$OUT")" && sha256sum "$(basename "$OUT").tar.xz" | tee "$(basename "$OUT").tar.xz.sha256" )
 
-# ---- 8. self-verify ---------------------------------------------------------
+# ---- 9. self-verify ---------------------------------------------------------
 "$PREFIX/bin/$TARGET-gcc" --version | head -1
 if [ "${SKIP_VERIFY:-0}" != 1 ]; then
   msg "verifying"

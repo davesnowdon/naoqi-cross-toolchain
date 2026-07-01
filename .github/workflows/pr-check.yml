@@ -1,0 +1,44 @@
+name: PR checks
+
+# Fast, build-free validation for pull requests (the full toolchain build lives in
+# build-toolchain.yml and runs only on demand / on v* tags). Runs in well under a
+# minute: shell syntax + shellcheck, vendored-blob checksum, and toolchain.xml.
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shell syntax (bash -n)
+        run: |
+          bash -n build-toolchain.sh
+          bash -n tests/verify-toolchain.sh
+
+      - name: ShellCheck (error severity)
+        run: shellcheck -S error build-toolchain.sh tests/verify-toolchain.sh
+
+      - name: Verify vendored blob checksum
+        working-directory: vendor
+        run: sha256sum -c aldebaran-reuse.tar.xz.sha256
+
+      - name: Validate toolchain.xml
+        run: |
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET, pathlib
+          root = ET.parse('toolchain-files/toolchain.xml').getroot()
+          pkgs = root.findall('package')
+          assert pkgs, 'no <package> entries in toolchain.xml'
+          tf = pkgs[0].get('toolchain_file')
+          assert tf, 'root package is missing a toolchain_file attribute'
+          p = pathlib.Path('toolchain-files') / tf
+          assert p.is_file(), f'referenced toolchain_file {tf!r} not found in toolchain-files/'
+          print(f'toolchain.xml OK: {len(pkgs)} package(s), toolchain_file={tf}')
+          PY

@@ -38,8 +38,11 @@ See [`docs/design.md`](docs/design.md) for the full ABI rationale and
 
 ## Build it
 
-Prerequisites (Debian/Ubuntu): `build-essential wget xz-utils bzip2 libgmp-dev file`.
-On other hosts, override `GMP_INC` / `GMP_LIB` to point at your host GMP.
+Prerequisites (Debian/Ubuntu): `build-essential wget xz-utils bzip2 libgmp-dev
+file pkg-config`. On other hosts, override `GMP_INC` / `GMP_LIB` to point at your
+host GMP. (`pkg-config` is the host program the generated `*-pkg-config` wrapper
+delegates to; upstream source tarballs and the vendored blob are checksum-verified
+before use.)
 
 ```sh
 ./build-toolchain.sh
@@ -62,12 +65,16 @@ cmake -S . -B build \
 cmake --build build -j
 ```
 
-The compiler **defaults to the old (gcc4-compatible) libstdc++ ABI**, so modern
-code — and gRPC/protobuf/abseil built with it — links cleanly against the NAOqi /
-boost / Qt / OpenCV libraries in the original ctc. Deploy the matching
-`runtime-libs/libstdc++.so.6` (+ `libgcc_s.so.1`) to the robot, or link the C++
-runtime statically. Full details, qibuild integration, and remote debugging with
-`robot-tools/gdbserver` are in [`docs/usage.md`](docs/usage.md).
+This toolchain ships the modern **compiler + the reused glibc-2.13 sysroot** only;
+it does **not** bundle the NAO library packages (NAOqi, boost, Qt, OpenCV, …).
+Because the compiler **defaults to the old (gcc4-compatible) libstdc++ ABI**,
+modern code — and gRPC/protobuf/abseil built with it — is *ABI-compatible* with
+those libraries, so you link against the copies in the **original Aldebaran ctc**
+(add its packages to your `CMAKE_PREFIX_PATH`, or overlay this `cross/` into the
+original ctc). Deploy the matching `runtime-libs/libstdc++.so.6` (+ `libgcc_s.so.1`)
+to the robot, or link the C++ runtime statically. Full details, qibuild
+integration, and remote debugging with `robot-tools/gdbserver` are in
+[`docs/usage.md`](docs/usage.md).
 
 ## Continuous integration
 

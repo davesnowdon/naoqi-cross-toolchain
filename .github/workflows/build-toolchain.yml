@@ -28,7 +28,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            build-essential wget xz-utils bzip2 libgmp-dev file ca-certificates
+            build-essential wget xz-utils bzip2 libgmp-dev file pkg-config ca-certificates
 
       # Cache the upstream GNU source tarballs (binutils/gcc/gdb + prerequisites)
       # between runs; the versions are pinned inside build-toolchain.sh.
