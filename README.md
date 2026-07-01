@@ -94,7 +94,13 @@ docs/                           design.md, usage.md, reference/
 
 ## License & provenance
 
-Project files are GPLv3 (see [LICENSE](LICENSE)). The vendored blob contains
-unmodified binaries from the redistributable Aldebaran NAO toolchain (glibc under
-LGPL-2.1, GCC runtime under the GCC Runtime Library Exception, gdbserver under
-GPL) — see [`vendor/README.md`](vendor/README.md).
+The **project's own files** (build scripts, CMake integration, docs, workflow) are
+licensed under GPLv3 — see [LICENSE](LICENSE).
+
+**`vendor/aldebaran-reuse.tar.xz` is NOT covered by this repository's license.** Its
+contents are **© Aldebaran Robotics** (now SoftBank Robotics), extracted verbatim
+from Aldebaran's proprietary NAO cross-toolchain and remaining the copyright of
+Aldebaran and the respective upstream projects. The individual components keep
+their own upstream licenses (glibc LGPL-2.1, GCC runtime under the GCC Runtime
+Library Exception, gdbserver GPL). This project claims no ownership over them — see
+[`vendor/README.md`](vendor/README.md).
