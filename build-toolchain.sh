@@ -62,30 +62,55 @@ verify_sha256(){ echo "$2  $1" | sha256sum -c - >/dev/null \
   || { echo "FATAL: checksum mismatch for $1" >&2; exit 1; }; }
 # fetch <url> <sha256>: download if missing, then verify
 fetch(){ local f; f="$(basename "$1")"; [ -f "$f" ] || wget -q "$1"; verify_sha256 "$f" "$2"; }
+# Stamp files tie an extracted/staged tree to the sha256 that produced it, so a
+# stale, partial or tampered extraction is never silently reused: without a
+# matching stamp it is deleted and re-created from the freshly verified archive.
+STAMP=.verified-sha256
+stale(){ [ -f "$1" ] && [ "$(cat "$1" 2>/dev/null)" = "$2" ] && return 1 || return 0; }
+mark(){ echo "$2" > "$1"; }
 
 # ---- 0. fetch (checksum-verified) sources + unpack the reused sysroot --------
+# Archives are verified on EVERY run; extracted/staged trees are re-created
+# unless their stamp proves they came from the currently-verified archive.
 cd "$SRC"
 fetch https://ftp.gnu.org/gnu/binutils/binutils-$BINUTILS_VER.tar.xz "$BINUTILS_SHA256"
 fetch https://ftp.gnu.org/gnu/gcc/gcc-$GCC_VER/gcc-$GCC_VER.tar.xz    "$GCC_SHA256"
 fetch https://ftp.gnu.org/gnu/gdb/gdb-$GDB_VER.tar.xz                 "$GDB_SHA256"
-[ -d binutils-$BINUTILS_VER ] || tar xf binutils-$BINUTILS_VER.tar.xz
-[ -d gcc-$GCC_VER ]          || { tar xf gcc-$GCC_VER.tar.xz; ( cd gcc-$GCC_VER && ./contrib/download_prerequisites ); }
-[ -d gdb-$GDB_VER ]          || tar xf gdb-$GDB_VER.tar.xz
+if stale "$SRC/binutils-$BINUTILS_VER/$STAMP" "$BINUTILS_SHA256"; then
+  rm -rf "$SRC/binutils-$BINUTILS_VER"; tar xf binutils-$BINUTILS_VER.tar.xz
+  mark "$SRC/binutils-$BINUTILS_VER/$STAMP" "$BINUTILS_SHA256"
+fi
+if stale "$SRC/gcc-$GCC_VER/$STAMP" "$GCC_SHA256"; then
+  rm -rf "$SRC/gcc-$GCC_VER"; tar xf gcc-$GCC_VER.tar.xz
+  ( cd "gcc-$GCC_VER" && ./contrib/download_prerequisites )   # self-verifies sha512
+  mark "$SRC/gcc-$GCC_VER/$STAMP" "$GCC_SHA256"
+fi
+if stale "$SRC/gdb-$GDB_VER/$STAMP" "$GDB_SHA256"; then
+  rm -rf "$SRC/gdb-$GDB_VER"; tar xf gdb-$GDB_VER.tar.xz
+  mark "$SRC/gdb-$GDB_VER/$STAMP" "$GDB_SHA256"
+fi
 
-if [ ! -e "$REUSE/sysroot/lib/libc-2.13.so" ]; then
-  msg "verifying + unpacking reuse blob $REUSE_TARBALL"
-  if [ -f "$REUSE_TARBALL.sha256" ]; then
-    ( cd "$(dirname "$REUSE_TARBALL")" && sha256sum -c "$(basename "$REUSE_TARBALL").sha256" )
-  else
-    echo "warning: no $REUSE_TARBALL.sha256 to verify against" >&2
-  fi
+# Reused glibc-2.13 sysroot + gdbserver: verify the blob on EVERY run, then
+# extract and stage it under stamps (never reuse a stale extraction/staging).
+msg "verifying reuse blob $REUSE_TARBALL"
+if [ -f "$REUSE_TARBALL.sha256" ]; then
+  ( cd "$(dirname "$REUSE_TARBALL")" && sha256sum -c "$(basename "$REUSE_TARBALL").sha256" )
+  REUSE_SHA=$(awk '{print $1}' "$REUSE_TARBALL.sha256")
+else
+  echo "warning: no $REUSE_TARBALL.sha256 to verify against" >&2
+  REUSE_SHA=$(sha256sum "$REUSE_TARBALL" | awk '{print $1}')
+fi
+if stale "$REUSE/$STAMP" "$REUSE_SHA"; then
+  msg "unpacking reuse blob"
   rm -rf "$REUSE"; mkdir -p "$REUSE"
   tar -C "$REUSE" -xf "$REUSE_TARBALL"
+  mark "$REUSE/$STAMP" "$REUSE_SHA"
 fi
-if [ ! -e "$SYSROOT/lib/libc-2.13.so" ]; then
+if stale "$PREFIX/$TARGET/.sysroot-verified" "$REUSE_SHA"; then
   msg "staging reused glibc-2.13 sysroot into $SYSROOT"
-  mkdir -p "$PREFIX/$TARGET"
+  rm -rf "$SYSROOT"; mkdir -p "$PREFIX/$TARGET"
   cp -a "$REUSE/sysroot" "$SYSROOT"
+  mark "$PREFIX/$TARGET/.sysroot-verified" "$REUSE_SHA"
 fi
 
 # ---- 1. binutils ------------------------------------------------------------
@@ -165,6 +190,7 @@ find "$PREFIX/bin" "$PREFIX/libexec" -type f -print0 \
 
 # ---- 8. package -------------------------------------------------------------
 msg "packaging $CTC_NAME.tar.xz"
+rm -f "$PREFIX/$TARGET/.sysroot-verified"    # build-only stamp; keep artifact clean
 tar -C "$(dirname "$OUT")" -cf - "$(basename "$OUT")" | xz -6 -T0 > "$OUT.tar.xz"
 ( cd "$(dirname "$OUT")" && sha256sum "$(basename "$OUT").tar.xz" | tee "$(basename "$OUT").tar.xz.sha256" )
 

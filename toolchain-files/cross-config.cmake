@@ -1,7 +1,9 @@
 ## NAO modern cross-toolchain — CMake toolchain file
 ## GCC 14 / binutils 2.44, reusing the NAO glibc-2.13 sysroot, Atom (bonnell)
-## tuned, defaulting to the old (gcc4-compatible) libstdc++ ABI so output links
-## against the bundled NAOqi / boost / Qt / OpenCV libraries.
+## tuned, defaulting to the old (gcc4-compatible) libstdc++ ABI so output is
+## ABI-compatible with the NAO's C++ libraries (NAOqi / boost / Qt / OpenCV),
+## which live in the original Aldebaran ctc — this toolchain ships the compiler
+## and sysroot only, not those packages.
 ##
 ## Regenerated from Aldebaran Robotics' original cross-config.cmake
 ## (Copyright (C) 2011, 2012 Aldebaran Robotics), modernized for current CMake.
@@ -72,7 +74,8 @@ set(_COMMON_FLAGS "-DI_AM_A_ROBOT ${_ARCH_FLAGS} -pipe -fomit-frame-pointer")
 
 set(CMAKE_C_FLAGS_INIT   "${_COMMON_FLAGS}")
 # Old (gcc4-compatible) libstdc++ ABI is the compiler default; assert it here so
-# third-party code (gRPC/protobuf/abseil) links against the bundled NAOqi libs.
+# third-party code (gRPC/protobuf/abseil) stays ABI-compatible with, and links
+# against, the NAO C++ libraries from the original ctc (not bundled here).
 set(CMAKE_CXX_FLAGS_INIT "${_COMMON_FLAGS} -D_GLIBCXX_USE_CXX11_ABI=0")
 
 set(CMAKE_EXE_LINKER_FLAGS_INIT    "-Wl,--as-needed")
