@@ -21,9 +21,11 @@ jobs:
         run: |
           bash -n build-toolchain.sh
           bash -n tests/verify-toolchain.sh
+          bash -n examples/build-examples.sh
+          bash -n examples/run.sh
 
       - name: ShellCheck (error severity)
-        run: shellcheck -S error build-toolchain.sh tests/verify-toolchain.sh
+        run: shellcheck -S error build-toolchain.sh tests/verify-toolchain.sh examples/build-examples.sh examples/run.sh
 
       - name: Verify vendored blob checksum
         working-directory: vendor

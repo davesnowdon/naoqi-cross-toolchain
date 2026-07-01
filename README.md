@@ -79,10 +79,11 @@ integration, and remote debugging with `robot-tools/gdbserver` are in
 ## Continuous integration
 
 [`.github/workflows/build-toolchain.yml`](.github/workflows/build-toolchain.yml)
-builds and verifies the toolchain. It runs **on demand** (Actions → *Build
-toolchain* → *Run workflow*) and **on pushing a `v*` tag**, which additionally
-attaches the built `.tar.xz` to a GitHub Release. It does not run on ordinary
-pushes/PRs (the build is long).
+builds and verifies the toolchain, then builds+runs an example program with it
+(see [`examples/`](examples/)) as an integration gate. It runs **on demand**
+(Actions → *Build toolchain* → *Run workflow*) and **on pushing a `v*` tag**, which
+additionally attaches the built `.tar.xz` to a GitHub Release. It does not run on
+ordinary pushes/PRs (the build is long).
 
 ```sh
 git tag v14.3.0-nao1 && git push origin v14.3.0-nao1   # -> builds + publishes a release
@@ -94,9 +95,10 @@ git tag v14.3.0-nao1 && git push origin v14.3.0-nao1   # -> builds + publishes a
 build-toolchain.sh              reproducible build (sources -> verified tarball)
 toolchain-files/                CMake/qibuild integration copied into the built ctc
 tests/verify-toolchain.sh       ABI / optimization checks
+examples/                       real NAO example programs + CI build gate + deploy docs
 vendor/aldebaran-reuse.tar.xz   trimmed glibc-2.13 sysroot + static gdbserver (reused)
 docs/                           design.md, usage.md, reference/
-.github/workflows/              build-toolchain.yml
+.github/workflows/              build-toolchain.yml, pr-check.yml
 ```
 
 ## License & provenance

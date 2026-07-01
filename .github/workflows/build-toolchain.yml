@@ -41,6 +41,12 @@ jobs:
       - name: Build and verify the toolchain
         run: ./build-toolchain.sh   # downloads sources, builds, packages, self-verifies
 
+      # Integration gate: the freshly built toolchain must compile AND run a real
+      # program. CI has no NAOqi SDK, so this builds+runs the plain example (the
+      # NAOqi examples build wherever the original ctc is available, via CTC=).
+      - name: Build example programs with the toolchain
+        run: ./examples/build-examples.sh
+
       - name: Upload toolchain artifact
         uses: actions/upload-artifact@v4
         with:
