@@ -1,2 +1,6 @@
+# Build scratch and outputs (produced by build-toolchain.sh)
+.build/
+.build-validate.log
+output/
+src/
 build.log
-.build
