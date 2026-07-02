@@ -10,6 +10,8 @@
 #include <string>
 
 #include <grpcpp/grpcpp.h>
+#include <grpcpp/support/channel_arguments.h>
+#include <grpc/impl/channel_arg_names.h>
 #include "speaker.pb.h"
 #include "speaker.grpc.pb.h"
 
@@ -18,7 +20,13 @@ static_assert(__cplusplus >= 201703L, "compile the gRPC side with -std=c++17");
 namespace bridge {
 
 std::string fetch_phrase(const std::string& server_address, const std::string& name) {
-    auto channel = grpc::CreateChannel(server_address, grpc::InsecureChannelCredentials());
+    // The NAO V4/V5 kernel (2.6.33) predates SO_REUSEPORT (Linux 3.9); on it the
+    // setsockopt returns ENOPROTOOPT. Disable it so gRPC doesn't try — harmless on
+    // a modern kernel, required on the robot. See ../../docs/usage.md.
+    grpc::ChannelArguments args;
+    args.SetInt(GRPC_ARG_ALLOW_REUSEPORT, 0);
+    auto channel = grpc::CreateCustomChannel(
+        server_address, grpc::InsecureChannelCredentials(), args);
     std::unique_ptr<naodemo::Speaker::Stub> stub = naodemo::Speaker::NewStub(channel);
 
     naodemo::PhraseRequest request;

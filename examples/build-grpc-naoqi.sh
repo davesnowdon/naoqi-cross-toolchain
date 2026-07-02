@@ -20,6 +20,10 @@ CTC="${CTC:-}"
 GRPC_ROOT="${GRPC_ROOT:-}"
 PROTOC="${PROTOC:-protoc}"
 GRPC_CPP_PLUGIN="${GRPC_CPP_PLUGIN:-grpc_cpp_plugin}"
+# A plain HOST pkg-config for the target-gRPC .pc files. gRPC is cross-built into a
+# host prefix, so its .pc files carry absolute host paths to the target libs — they
+# must NOT be rewritten against the sysroot (unlike the toolchain's own pkg-config).
+PKG_CONFIG="${PKG_CONFIG:-pkg-config}"
 
 TARGET=i686-aldebaran-linux-gnu
 GXX="$MT/cross/bin/$TARGET-g++"
@@ -62,13 +66,22 @@ if [ -n "$GRPC_ROOT" ]; then
   echo "   gRPC side: REAL (GRPC_ROOT=$GRPC_ROOT)"
   "$PROTOC" -I"$SRC" --cpp_out="$OBJ" "$SRC/speaker.proto"
   "$PROTOC" -I"$SRC" --grpc_out="$OBJ" --plugin=protoc-gen-grpc="$GRPC_CPP_PLUGIN" "$SRC/speaker.proto"
-  read -ra GRPC_CFLAGS <<< "$(PKG_CONFIG_PATH="$GRPC_ROOT/lib/pkgconfig" "$PKGCONFIG" --cflags grpc++ 2>/dev/null || true)"
-  read -ra GRPC_LIBS   <<< "$(PKG_CONFIG_PATH="$GRPC_ROOT/lib/pkgconfig" "$PKGCONFIG" --libs   grpc++ 2>/dev/null || echo '-lgrpc++ -lgrpc -lgpr -lprotobuf')"
+  # --static: gRPC is cross-built as static archives, so the full private closure
+  # (re2/openssl/zlib/cares/upb/absl) must be on the link line, not just grpc++.
+  # Query grpc++ AND protobuf: gRPC's grpc++.pc intentionally omits protobuf (you
+  # link it yourself), yet the generated *.pb.cc need libprotobuf's symbols.
+  gpc() { PKG_CONFIG_PATH="$GRPC_ROOT/lib/pkgconfig" PKG_CONFIG_SYSROOT_DIR="" "$PKG_CONFIG" --static "$@"; }
+  read -ra GRPC_CFLAGS <<< "$(gpc --cflags grpc++ protobuf 2>/dev/null || true)"
+  read -ra GRPC_LIBS   <<< "$(gpc --libs   grpc++ protobuf 2>/dev/null || echo '-lgrpc++ -lgrpc -lgpr -lprotobuf')"
   "$GXX" "${CXX17[@]}" -I"$OBJ" "${GRPC_CFLAGS[@]}" -c "$OBJ/speaker.pb.cc"      -o "$OBJ/speaker.pb.o"
   "$GXX" "${CXX17[@]}" -I"$OBJ" "${GRPC_CFLAGS[@]}" -c "$OBJ/speaker.grpc.pb.cc" -o "$OBJ/speaker.grpc.pb.o"
   "$GXX" "${CXX17[@]}" -I"$OBJ" "${GRPC_CFLAGS[@]}" -c "$SRC/grpc_side.cpp"       -o "$OBJ/grpc_side.o"
   GRPC_OBJS=("$OBJ/speaker.pb.o" "$OBJ/speaker.grpc.pb.o" "$OBJ/grpc_side.o")
-  GRPC_LNK=(-L"$GRPC_ROOT/lib" -Wl,-rpath-link,"$GRPC_ROOT/lib" "${GRPC_LIBS[@]}")
+  # --start-group: static abseil/gRPC/protobuf have circular inter-archive refs.
+  # System libs go last (the static archives depend on them): pthread/dl/rt/m.
+  GRPC_LNK=(-L"$GRPC_ROOT/lib" -Wl,-rpath-link,"$GRPC_ROOT/lib"
+            -Wl,--start-group "${GRPC_LIBS[@]}" -Wl,--end-group
+            -lpthread -ldl -lrt -lm)
   grpc_real=1
 else
   echo "   gRPC side: stub  (set GRPC_ROOT=/path/to/target-grpc for the real gRPC client)"
