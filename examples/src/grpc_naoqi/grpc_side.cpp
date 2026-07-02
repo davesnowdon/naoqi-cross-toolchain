@@ -7,6 +7,7 @@
 #include "bridge.h"
 
 #include <memory>
+#include <stdexcept>
 #include <string>
 
 #include <grpcpp/grpcpp.h>
@@ -36,8 +37,8 @@ std::string fetch_phrase(const std::string& server_address, const std::string& n
 
     const grpc::Status status = stub->GetPhrase(&context, request, &reply);
     if (!status.ok()) {
-        return std::string("[gRPC error ") + std::to_string(status.error_code()) + "] "
-               + status.error_message();
+        throw std::runtime_error("gRPC GetPhrase failed [code "
+            + std::to_string(status.error_code()) + "] " + status.error_message());
     }
     return reply.phrase();
 }

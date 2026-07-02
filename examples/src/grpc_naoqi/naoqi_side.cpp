@@ -3,7 +3,7 @@
 // Linked in place of naoqi_side_stub.cpp when the NAOqi SDK (CTC) is available.
 #include "bridge.h"
 
-#include <iostream>
+#include <stdexcept>
 #include <string>
 
 #include <alproxies/altexttospeechproxy.h>
@@ -14,11 +14,14 @@ static_assert(__cplusplus < 201703L, "compile the NAOqi side with -std=gnu++11")
 namespace bridge {
 
 void speak(const std::string& text, const std::string& robot_ip, int robot_port) {
+    // Rethrow ALError as std::runtime_error: main.cpp (and bridge.h) are
+    // ABI-neutral and must not see any NAOqi type. The std::exception ABI is
+    // shared across the whole old-ABI binary, so main's catch matches.
     try {
         AL::ALTextToSpeechProxy tts(robot_ip, robot_port);
         tts.say(text);
     } catch (const AL::ALError& e) {
-        std::cerr << "[naoqi] error: " << e.what() << std::endl;
+        throw std::runtime_error(std::string("NAOqi TTS failed: ") + e.what());
     }
 }
 

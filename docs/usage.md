@@ -181,11 +181,17 @@ The one that bites gRPC users:
   `asm-generic/socket.h`). Software that references it either fails to compile
   (undefined constant) or, if it self-defines it (gRPC does, value 15),
   `setsockopt(...SO_REUSEPORT...)` returns **`ENOPROTOOPT`** at runtime.
-  - **gRPC workaround:** disable it via the server channel arg
-    `GRPC_ARG_ALLOW_REUSEPORT` (`"grpc.so_reuseport"`) set to `0`:
+  - **gRPC workaround:** disable it via the channel arg `GRPC_ARG_ALLOW_REUSEPORT`
+    (`"grpc.so_reuseport"`) set to `0`, on both server and client:
     ```cpp
+    // server
     grpc::ServerBuilder b;
     b.AddChannelArgument(GRPC_ARG_ALLOW_REUSEPORT, 0);
+
+    // client (as the grpc_naoqi example's grpc_side.cpp does)
+    grpc::ChannelArguments args;
+    args.SetInt(GRPC_ARG_ALLOW_REUSEPORT, 0);
+    auto channel = grpc::CreateCustomChannel(addr, creds, args);
     ```
   - **General code:** guard the call and treat `ENOPROTOOPT` as "not supported"; for
     a single listener you don't need `SO_REUSEPORT` at all (`SO_REUSEADDR` exists).

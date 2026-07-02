@@ -18,10 +18,14 @@ namespace bridge {
 
 // Implemented by the gRPC side (grpc_side.cpp / grpc_side_stub.cpp, -std=c++17):
 // fetch a phrase from a gRPC server. server_address is "host:port".
+// THROWS std::runtime_error if the RPC fails (so a failed fetch is a failed test,
+// not a success that speaks an error string). std::exception crosses the boundary
+// safely: the whole binary shares one old-ABI libstdc++.
 std::string fetch_phrase(const std::string& server_address, const std::string& name);
 
 // Implemented by the NAOqi side (naoqi_side.cpp / naoqi_side_stub.cpp, -std=gnu++11):
 // speak text on the robot via ALTextToSpeechProxy.
+// THROWS std::runtime_error if TTS fails (e.g. NAOqi unreachable).
 void speak(const std::string& text, const std::string& robot_ip, int robot_port);
 
 }  // namespace bridge

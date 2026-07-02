@@ -9,22 +9,27 @@ Run:       python3 test_server.py [host:port]     (default 0.0.0.0:50051)
 
 It self-generates the Python stubs from speaker.proto on first run.
 """
+import atexit
 import os
-import sys
+import shutil
 import subprocess
+import sys
+import tempfile
 from concurrent import futures
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
-# Generate speaker_pb2{,_grpc}.py from speaker.proto if missing.
-if not os.path.exists(os.path.join(HERE, "speaker_pb2_grpc.py")):
-    subprocess.check_call([
-        sys.executable, "-m", "grpc_tools.protoc",
-        "-I", HERE, "--python_out", HERE, "--grpc_python_out", HERE,
-        os.path.join(HERE, "speaker.proto"),
-    ])
+# Generate speaker_pb2{,_grpc}.py into a fresh temp dir every run: never writes
+# into the checkout, and never reuses stale stubs if speaker.proto changed.
+GEN = tempfile.mkdtemp(prefix="grpc_naoqi_stubs_")
+atexit.register(shutil.rmtree, GEN, ignore_errors=True)
+subprocess.check_call([
+    sys.executable, "-m", "grpc_tools.protoc",
+    "-I", HERE, "--python_out", GEN, "--grpc_python_out", GEN,
+    os.path.join(HERE, "speaker.proto"),
+])
 
-sys.path.insert(0, HERE)
+sys.path.insert(0, GEN)
 import grpc                     # noqa: E402
 import speaker_pb2              # noqa: E402
 import speaker_pb2_grpc         # noqa: E402

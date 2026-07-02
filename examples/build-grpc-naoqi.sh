@@ -93,11 +93,22 @@ echo "   linking grpc_naoqi_demo"
 "$GXX" -o "$BIN/grpc_naoqi_demo" "$OBJ/main.o" "$OBJ/naoqi_side.o" "${GRPC_OBJS[@]}" \
       "${GRPC_LNK[@]}" "${NAOQI_LNK[@]}"
 
-# ---- coexistence proof: the whole binary is uniformly old-ABI ---------------
-OD="$MT/cross/bin/$TARGET-objdump"
-cxx11=$("$OD" -T "$BIN/grpc_naoqi_demo" 2>/dev/null | grep -c '__cxx11' || true)
-echo "   uniform old C++ ABI check: __cxx11 symbols = $cxx11 (expect 0)"
+# ---- coexistence proof: uniformly old-ABI AND within the robot's glibc --------
+OD="$MT/cross/bin/$TARGET-objdump"; NM="$MT/cross/bin/$TARGET-nm"
+DEMO="$BIN/grpc_naoqi_demo"
+# Check __cxx11 across BOTH the full symbol table (nm — static archives land here)
+# and the dynamic table (objdump -T): a static-heavy link can hide new-ABI symbols
+# in .symtab that never reach .dynsym.
+cxx11=$({ "$NM" -C "$DEMO" 2>/dev/null; "$OD" -T "$DEMO" 2>/dev/null; } | grep -c '__cxx11' || true)
+maxglibc=$("$OD" -T "$DEMO" 2>/dev/null | grep -oE 'GLIBC_[0-9.]+'   | sort -uV | tail -1)
+maxgxx=$(  "$OD" -T "$DEMO" 2>/dev/null | grep -oE 'GLIBCXX_[0-9.]+' | sort -uV | tail -1)
+echo "   old C++ ABI: __cxx11 = $cxx11 (expect 0);  max glibc=${maxglibc:-none}, GLIBCXX=${maxgxx:-none}"
 [ "$cxx11" = 0 ] || { echo "   FAIL: binary mixes old and new libstdc++ ABI" >&2; exit 1; }
+# Robot userland is glibc 2.13 — fail if anything demands newer.
+if [ -n "$maxglibc" ] && \
+   [ "$(printf '%s\nGLIBC_2.13\n' "$maxglibc" | sort -V | tail -1)" != "GLIBC_2.13" ]; then
+  echo "   FAIL: needs $maxglibc, newer than the robot's glibc 2.13" >&2; exit 1
+fi
 
 # ---- run (only the all-stub build is self-contained: no server/robot needed) --
 if [ "$naoqi_real" = 0 ] && [ "$grpc_real" = 0 ] && [ "${SKIP_RUN:-0}" != 1 ]; then
