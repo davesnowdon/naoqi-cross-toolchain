@@ -1,0 +1,17 @@
+<toolchain>
+  <!--
+    qitoolchain manifest for the assembled artifact. This toolchain ships the
+    modern COMPILER + the reused glibc-2.13 sysroot only; it does NOT bundle the
+    NAO library packages (NAOqi, boost, Qt, OpenCV, ...). Those live in the
+    original Aldebaran ctc; because this compiler defaults to the old (gcc4-
+    compatible) C++ ABI, code you build here is ABI-compatible with them and can
+    link against the copies in the original ctc (see docs/usage.md).
+  -->
+  <package cross_gdb="cross/bin/i686-aldebaran-linux-gnu-gdb"
+           directory="."
+           host="x86_64-pc-linux-gnu"
+           name="naoqi-atom-ctc-modern"
+           sysroot="cross/i686-aldebaran-linux-gnu/sysroot"
+           target="i686-aldebaran-linux-gnu"
+           toolchain_file="cross-config.cmake" />
+</toolchain>

@@ -1,2 +1,15 @@
-build.log
-.build
+# Build scratch and outputs (produced by build-toolchain.sh) — repo-root only,
+# so nested dirs like examples/src/ are NOT ignored.
+/.build/
+/.build-validate.log
+/output/
+/src/
+/build.log
+
+# Example build artifacts (produced by examples/build-examples.sh)
+examples/bin/
+examples/deploy/
+
+# Python bytecode
+__pycache__/
+*.pyc
