@@ -9,3 +9,7 @@
 # Example build artifacts (produced by examples/build-examples.sh)
 examples/bin/
 examples/deploy/
+
+# Python bytecode
+__pycache__/
+*.pyc
