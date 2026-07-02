@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+// Tiny service: the client asks for a phrase and the server returns a string for
+// the robot to speak. Used by grpc_side.cpp (client) and test_server.py (server).
+package naodemo;
+
+service Speaker {
+  rpc GetPhrase (PhraseRequest) returns (PhraseReply) {}
+}
+
+message PhraseRequest {
+  string name = 1;
+}
+
+message PhraseReply {
+  string phrase = 1;
+}

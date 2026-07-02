@@ -22,10 +22,11 @@ jobs:
           bash -n build-toolchain.sh
           bash -n tests/verify-toolchain.sh
           bash -n examples/build-examples.sh
+          bash -n examples/build-grpc-naoqi.sh
           bash -n examples/run.sh
 
       - name: ShellCheck (error severity)
-        run: shellcheck -S error build-toolchain.sh tests/verify-toolchain.sh examples/build-examples.sh examples/run.sh
+        run: shellcheck -S error build-toolchain.sh tests/verify-toolchain.sh examples/build-examples.sh examples/build-grpc-naoqi.sh examples/run.sh
 
       - name: Verify vendored blob checksum
         working-directory: vendor

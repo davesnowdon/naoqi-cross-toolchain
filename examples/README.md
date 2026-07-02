@@ -12,6 +12,11 @@ toolchain does **not** target NAO **V6** (2018), which is 64-bit and runs a newe
 | `src/plain_hello.cpp` | Toolchain output runs on the bare robot OS (`std::string`) | no |
 | `src/say_hello.cpp`   | Canonical NAOqi example — `ALTextToSpeechProxy::say()` | yes |
 | `src/robot_info.cpp`  | Read-only `ALSystemProxy` + TTS getters | yes |
+| [`src/grpc_naoqi/`](src/grpc_naoqi/) | **Modern gRPC (C++17) + NAOqi (gnu++11) in one binary** — fetch a string over gRPC, speak it via NAOqi | yes (+ gRPC) |
+
+The first three are built by `build-examples.sh`; the coexistence demo is built by
+`build-grpc-naoqi.sh` (see [`src/grpc_naoqi/README.md`](src/grpc_naoqi/README.md)).
+Both scripts run in CI.
 
 ## Building
 

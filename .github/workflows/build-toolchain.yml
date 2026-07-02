@@ -47,6 +47,13 @@ jobs:
       - name: Build example programs with the toolchain
         run: ./examples/build-examples.sh
 
+      # Coexistence gate: a C++17 module and a gnu++11 module linked into one
+      # binary with a uniform old libstdc++ ABI (the gRPC-with-NAOqi pattern). CI
+      # has neither the gRPC stack nor the NAOqi SDK, so it builds+runs the
+      # all-stub variant; the real gRPC/NAOqi implementations swap in locally.
+      - name: Build the gRPC + NAOqi coexistence demo
+        run: ./examples/build-grpc-naoqi.sh
+
       - name: Upload toolchain artifact
         uses: actions/upload-artifact@v4
         with:
