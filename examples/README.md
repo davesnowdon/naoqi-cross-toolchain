@@ -1,8 +1,11 @@
 # Examples — building real NAO programs with the toolchain
 
 These programs demonstrate (and, in CI, **gate**) that the modern toolchain builds
-C/C++ that runs on the robot and interoperates with the NAOqi 2.1 C++ SDK. They
-target **NAO V4 and V5** (NAOqi 2.1.x, 32-bit Intel Atom, glibc 2.13).
+C/C++ that runs on the robot and interoperates with the NAOqi 2.1 C++ SDK.
+
+**Scope: NAO V4 and V5 only** (NAOqi 2.1.x, 32-bit Intel Atom, glibc 2.13). This
+toolchain does **not** target NAO **V6** (2018), which is 64-bit and runs a newer OS
+/ NAOqi 2.8 — a different ABI entirely.
 
 | Source | Demonstrates | NAOqi SDK? |
 |---|---|---|
@@ -31,8 +34,21 @@ target **NAO V4 and V5** (NAOqi 2.1.x, 32-bit Intel Atom, glibc 2.13).
   The modern toolchain ships only the compiler + sysroot; NAOqi programs link the
   SDK from the original ctc (see [`../docs/usage.md`](../docs/usage.md)). The old
   (gcc4-compatible) C++ ABI is the compiler default, so a GCC-14 binary links
-  cleanly against the GCC-4.5-built NAOqi libraries. `-std=gnu++11` keeps the
-  boost 1.55 / NAOqi headers happy under GCC 14.
+  cleanly against the GCC-4.5-built NAOqi libraries.
+
+> **You must compile NAOqi code with `-std=gnu++11` (or older).** GCC 14 defaults
+> to C++17, under which the NAOqi 2.1 / boost 1.55 headers **fail to compile** —
+> they use `std::auto_ptr` / `std::unary_function` / `std::binary_function`, which
+> C++17 removed (you get hard errors in e.g. `qi/details/log.hxx`, not warnings).
+> `gnu++11` compiles cleanly. Note that even under `gnu++11` GCC 14 prints a wall
+> of *benign* boost deprecation warnings (`auto_ptr`, `unary_function`, …) — those
+> are expected, not errors. This constraint applies only to the old NAOqi/boost
+> headers; your own modern code (gRPC/abseil/etc.) can still use C++14/17.
+
+Even a trivial NAOqi client transitively pulls in the whole qi/boost stack:
+`say_hello` only calls TTS, yet needs `libalproxies`/`libalcommon`/`libqi`/… plus
+~9 boost libraries, because the SDK libs depend on them (see the link list in
+`build-examples.sh`, taken from `alproxies-config.cmake`'s `*_DEPENDS`).
 
 Outputs go to `examples/bin/` (git-ignored). The script also assembles a
 ready-to-copy robot bundle at `examples/deploy/nao-modern-examples/` (binaries +

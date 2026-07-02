@@ -60,6 +60,53 @@ gRPC pulls in abseil, protobuf, c-ares, re2 and zlib. The pattern:
 
 Abseil and protobuf are verified to cross-build with this toolchain out of the box.
 
+### Combining gRPC and NAOqi in one binary
+
+You can put modern-gRPC code and NAOqi code in the **same executable**, but two
+independent constraints drive the design:
+
+1. **Language standard is per–translation-unit and the two sides disagree.** The
+   NAOqi 2.1 / boost 1.55 headers **do not compile under C++17** (GCC 14's default)
+   — they use `std::auto_ptr` / `std::unary_function`, removed in C++17 — so NAOqi
+   code must be compiled `-std=gnu++11`. Modern gRPC/abseil need `-std=c++17`.
+   → **Never `#include` NAOqi headers and gRPC/abseil headers in the same `.cpp`.**
+   Splitting by module (as you suspected) is therefore *necessary*.
+
+2. **The libstdc++ ABI is whole-binary and must be uniform.** Keep the toolchain's
+   default **old ABI (`_GLIBCXX_USE_CXX11_ABI=0`) everywhere** — including when you
+   build gRPC, abseil, protobuf, re2, c-ares, zlib. Because every TU then shares the
+   same `std::string`/container layout, the two module-sets interoperate freely
+   (you can even pass `std::string` across the boundary). Verify the final binary
+   has **zero `__cxx11` symbols** (`objdump -T app | grep __cxx11`).
+
+Recommended shape — a thin ABI-neutral bridge:
+
+```
+bridge.h        // plain funcs / POD / std::string only; compiles under BOTH standards
+naoqi_side.cpp  // -std=gnu++11 ; #includes NAOqi headers + bridge.h
+grpc_side.cpp   // -std=c++17   ; #includes gRPC/abseil headers + bridge.h
+main.cpp        // orchestration; #includes bridge.h only
+```
+
+Link the objects together normally. This is *sufficient* provided you also handle:
+
+- **Build abseil and your gRPC-side TUs with the same `-std`/flags.** abseil's ABI
+  changes with the C++ standard (e.g. `absl::string_view` aliases
+  `std::string_view` under C++17); mixing standards across abseil users is an ODR
+  trap. Pick C++17 for the whole gRPC side.
+- **Duplicate third-party libraries.** NAOqi bundles OpenSSL (and boost); gRPC
+  brings BoringSSL/OpenSSL (and protobuf). Two copies of the same library's symbols
+  in one process can crash. Prefer static-linking gRPC's deps with hidden
+  visibility (`-fvisibility=hidden`, `-Wl,--exclude-libs,ALL`) so they don't
+  collide with the robot's copies.
+- **Runtime kernel limits (2.6.33)** — see *Caveats* below; gRPC in particular
+  needs `SO_REUSEPORT` disabled.
+
+If the in-process ABI juggling gets fragile, the robust alternative is **two
+processes**: a modern-gRPC binary and a NAOqi binary that talk over a local socket
+/ pipe. Each process is its own ABI world, so nothing above applies — at the cost
+of an IPC hop.
+
 ## qibuild / qitoolchain
 
 ```sh
@@ -120,9 +167,37 @@ default, and that a freshly compiled binary runs under the reused glibc-2.13 loa
 
 ## Caveats
 
-- **Old kernel (2.6.33):** some modern libraries assume newer *runtime* syscalls
-  (e.g. `SO_REUSEPORT` needs Linux 3.9). That's a property of the software you
-  build, not of the toolchain.
+### Old kernel (Linux 2.6.33) — a runtime ceiling, not a build one
+
+NAO V4/V5 run Linux **2.6.33**, and the reused sysroot's headers match. Features
+added to later kernels are simply absent at runtime (and some constants are not even
+defined in the headers). This is a property of the *robot*, not the toolchain — the
+toolchain will happily build code that then fails at runtime on the robot.
+
+The one that bites gRPC users:
+
+- **`SO_REUSEPORT`** was added in Linux **3.9**. It is not defined in the 2.6.33
+  headers (there is literally a `/* To add :#define SO_REUSEPORT 15 */` in
+  `asm-generic/socket.h`). Software that references it either fails to compile
+  (undefined constant) or, if it self-defines it (gRPC does, value 15),
+  `setsockopt(...SO_REUSEPORT...)` returns **`ENOPROTOOPT`** at runtime.
+  - **gRPC workaround:** disable it via the server channel arg
+    `GRPC_ARG_ALLOW_REUSEPORT` (`"grpc.so_reuseport"`) set to `0`:
+    ```cpp
+    grpc::ServerBuilder b;
+    b.AddChannelArgument(GRPC_ARG_ALLOW_REUSEPORT, 0);
+    ```
+  - **General code:** guard the call and treat `ENOPROTOOPT` as "not supported"; for
+    a single listener you don't need `SO_REUSEPORT` at all (`SO_REUSEADDR` exists).
+
+Other post-2.6.33 gaps to expect if you pull in modern networking/crypto:
+`TCP_USER_TIMEOUT` (3.7 — also not in the headers; gRPC keepalive uses it),
+`sendmmsg` (3.0), and `getrandom` (3.17 — BoringSSL/abseil fall back to
+`/dev/urandom`). Audit `setsockopt`/syscall use, or run under `strace` on the robot
+to find `ENOSYS`/`ENOPROTOOPT`.
+
+### Other
+
 - Sanitizers (asan/tsan) are disabled for this target.
 - `-march=bonnell` output requires SSSE3+MOVBE (present on NAO Z530, not on plain
   i686).

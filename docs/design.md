@@ -8,6 +8,10 @@ GCC 4.5.3 / binutils 2.21.1 / glibc 2.13 / Linux headers 2.6.33, target
 cannot build modern C++ (gRPC/abseil/protobuf need C++14/17 and a modern
 libstdc++). We want a modern compiler whose output still runs on the robot.
 
+**Scope: NAO V4 and V5** (NAOqi 2.1.x, 32-bit Atom, glibc 2.13, Linux 2.6.33).
+NAO **V6** (2018) is a different platform — 64-bit, newer OS, NAOqi 2.8 — and is
+**not** a target of this toolchain.
+
 ## Why we reuse the sysroot instead of rebuilding glibc
 
 What actually makes a binary runnable on the robot is the **glibc version** it was

@@ -15,12 +15,19 @@ it on a NAO **V4 / V5** (NAOqi 2.1.x, 32-bit Atom).
 
 ## Why the bundle ships `lib/`
 
-The programs are compiled by GCC 14, so their C++ runtime references symbols up to
-`GLIBCXX_3.4.32`. The robot's stock `libstdc++.so.6` (GCC 4.5-era, ~`3.4.14`) is
-too old. The `libstdc++.so.6` shipped in `lib/` is a backward-compatible superset
+The NAOqi programs are compiled by GCC 14, so their C++ runtime references symbols
+up to `GLIBCXX_3.4.32`. The robot's stock `libstdc++.so.6` (GCC 4.5-era, ~`3.4.14`)
+is too old. The `libstdc++.so.6` shipped in `lib/` is a backward-compatible superset
 that still needs only `glibc 2.13`, so it serves the new programs and the robot's
 existing binaries. Everything else the programs need — `libqi`, `libalproxies`,
 `libboost_*`, `libc`, ... — is already on the robot as part of NAOqi.
+
+> **Not every binary needs the shipped `libstdc++`.** Only those that reference
+> `GLIBCXX > 3.4.14` do — check with
+> `i686-aldebaran-linux-gnu-objdump -T <binary> | grep -o 'GLIBCXX_[0-9.]*' | sort -uV | tail -1`.
+> `say_hello`/`robot_info` need `3.4.32`, so they require it; `plain_hello` uses only
+> `GLIBCXX_3.4` and runs on the robot's stock `libstdc++` unchanged (verified). When
+> in doubt, launch via `run.sh` — putting `lib/` first is always safe.
 
 ## 1. Copy to the robot
 
@@ -37,6 +44,14 @@ find / -name 'libqi.so' 2>/dev/null      # e.g. /opt/aldebaran/lib
 
 Use the directory containing `libqi.so`. On NAOqi 2.1 it is usually
 `/opt/aldebaran/lib`, which is `run.sh`'s default (`NAOQI_LIB`).
+
+> **Why the robot's own dir, and not the ctc SDK?** The binaries record boost's
+> *plain* SONAMEs (`libboost_system.so.1.55.0`, …), but the ctc SDK dir only
+> contains the differently-named files `libboost_system-mt-1_55.so.1.55.0`, so it
+> does **not** satisfy those SONAMEs at runtime — do not point `NAOQI_LIB` at the
+> ctc's `libnaoqi/lib` (you'd get `libboost_system.so.1.55.0: cannot open`). The
+> robot's NAOqi install provides the plain-named libraries (its own `libqi` needs
+> them too), which is why the robot's lib dir is the right — and simplest — choice.
 
 ## 3. Run
 
