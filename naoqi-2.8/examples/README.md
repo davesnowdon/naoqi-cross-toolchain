@@ -30,3 +30,7 @@ opposite). The `grpc_naoqi_v6` sources `bridge.h`/`main.cpp`/`grpc_side*.cpp`/
 `speaker.proto`/`test_server.py` are shared with
 [`naoqi-2.1/examples/src/grpc_naoqi/`](../../naoqi-2.1/examples/src/grpc_naoqi/) —
 only the NAOqi side differs (qi API vs ALProxy).
+
+**All four binaries are validated on a real NAO V6** ("romulus", 2026-07-03):
+plain ran, info read robot data, say spoke, and the gRPC demo fetched phrases
+from a PC over the network and spoke them — each exit 0.
