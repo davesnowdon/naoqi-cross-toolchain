@@ -74,7 +74,7 @@ The final robot-side confirmation (the robot speaking) needs a physical NAO — 
 
 ## CI
 
-`.github/workflows/build-toolchain.yml` runs `examples/build-examples.sh`
+`.github/workflows/build-toolchain-2.1.yml` runs `naoqi-2.1/examples/build-examples.sh`
 immediately after building and verifying the toolchain, so a toolchain that cannot
 compile+run a real program fails the build. (CI has no NAOqi SDK, so it gates on
 the `plain_hello` build+run; the NAOqi examples build wherever the ctc is present.)

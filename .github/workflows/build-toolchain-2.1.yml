@@ -1,4 +1,4 @@
-name: Build toolchain
+name: Build toolchain (NAOqi 2.1 / NAO V4-V5)
 
 # The full build takes ~60-90 min on a standard runner, so it does NOT run on
 # ordinary pushes/PRs. Trigger it manually (Actions -> Build toolchain -> Run
@@ -13,7 +13,7 @@ permissions:
   contents: write   # needed to attach the tarball to a Release on tag builds
 
 concurrency:
-  group: build-toolchain-${{ github.ref }}
+  group: build-toolchain-2.1-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -35,32 +35,32 @@ jobs:
       - name: Cache GNU sources
         uses: actions/cache@v4
         with:
-          path: .build/src
-          key: gnu-src-${{ hashFiles('build-toolchain.sh') }}
+          path: naoqi-2.1/.build/src
+          key: gnu-src-${{ hashFiles('naoqi-2.1/build-toolchain.sh') }}
 
       - name: Build and verify the toolchain
-        run: ./build-toolchain.sh   # downloads sources, builds, packages, self-verifies
+        run: ./naoqi-2.1/build-toolchain.sh   # downloads sources, builds, packages, self-verifies
 
       # Integration gate: the freshly built toolchain must compile AND run a real
       # program. CI has no NAOqi SDK, so this builds+runs the plain example (the
       # NAOqi examples build wherever the original ctc is available, via CTC=).
       - name: Build example programs with the toolchain
-        run: ./examples/build-examples.sh
+        run: ./naoqi-2.1/examples/build-examples.sh
 
       # Coexistence gate: a C++17 module and a gnu++11 module linked into one
       # binary with a uniform old libstdc++ ABI (the gRPC-with-NAOqi pattern). CI
       # has neither the gRPC stack nor the NAOqi SDK, so it builds+runs the
       # all-stub variant; the real gRPC/NAOqi implementations swap in locally.
       - name: Build the gRPC + NAOqi coexistence demo
-        run: ./examples/build-grpc-naoqi.sh
+        run: ./naoqi-2.1/examples/build-grpc-naoqi.sh
 
       - name: Upload toolchain artifact
         uses: actions/upload-artifact@v4
         with:
           name: ctc-linux64-atom-2.1.4.14-modern
           path: |
-            output/*.tar.xz
-            output/*.tar.xz.sha256
+            naoqi-2.1/output/*.tar.xz
+            naoqi-2.1/output/*.tar.xz.sha256
           if-no-files-found: error
           retention-days: 30
 
@@ -69,6 +69,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            output/*.tar.xz
-            output/*.tar.xz.sha256
+            naoqi-2.1/output/*.tar.xz
+            naoqi-2.1/output/*.tar.xz.sha256
           generate_release_notes: true
