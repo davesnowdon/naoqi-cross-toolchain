@@ -4,9 +4,10 @@ Proof that a **modern gRPC client (C++17)** and **NAOqi code (gnu++11)** can liv
 the *same* executable built with this toolchain, and do real work together: fetch a
 string over gRPC, then speak it on the robot via NAOqi.
 
-This has been carried all the way through: gRPC v1.60.0 was cross-built for the
-target with this toolchain, and the resulting binary performed a **real gRPC network
-fetch** (see *How this is tested* below).
+This has been carried all the way through — and **validated on a real NAO V5**: gRPC
+v1.60.0 was cross-built for the target with this toolchain, and one old-ABI binary
+fetched a string over gRPC on the robot's 2.6.33 kernel and **spoke it via NAOqi**
+(see *How this is tested* below).
 
 ## Why two modules
 
@@ -137,8 +138,8 @@ There is no NAO in CI or in this dev environment, so be precise about the method
 | C++17↔gnu++11 **old-ABI** coexistence at runtime | ✅ | the `std::string` crossed the boundary intact |
 | **glibc symbol ceiling ≤ 2.13** | ✅ (static) | `objdump -T` ⇒ max `GLIBC_2.12`, no run needed |
 | **old C++ ABI** (interops with GCC-4.5 NAOqi) | ✅ (static) | `objdump -T … __cxx11` = 0 |
-| behavior on the robot's **kernel 2.6.33** | ❌ | syscalls here hit the host kernel |
-| actual NAOqi **TTS speaking** | ❌ | needs NAOqi + the physical robot |
+| behavior on the robot's **kernel 2.6.33** | ✅ *on hardware* | validated on a NAO V5 — real gRPC fetch on the 2.6.33 kernel |
+| actual NAOqi **TTS speaking** | ✅ *on hardware* | validated on a NAO V5 — the robot spoke the fetched phrase |
 
 The two decisive robot-compatibility guarantees — **glibc ≤ 2.13** and **old ABI** —
 are link-time properties of the ELF and hold whether or not it runs. The host run
@@ -146,6 +147,13 @@ only adds "…and it genuinely functions." What it **cannot** catch is kernel-ve
 behavior: the host kernel (6.x) has `SO_REUSEPORT`/`getrandom` that the robot's
 2.6.33 lacks. The client already disables `SO_REUSEPORT` (see `grpc_side.cpp`); the
 remaining old-kernel caveats are in [`../../docs/usage.md`](../../docs/usage.md).
+
+> **Validated on hardware (2026-07-03).** On a NAO V5 ("rommie", NAOqi 2.1.4.13):
+> `plain_hello` ran; `say_hello`/`robot_info` drove real NAOqi TTS + queries; and the
+> both-real `grpc_naoqi_demo` — one old-ABI binary — fetched a string from a PC over
+> modern gRPC 1.60 **on the robot's 2.6.33 kernel** and spoke it via NAOqi. The two
+> rows marked "on hardware" above are confirmed end-to-end. NAO V4 is unproven but
+> shares the ABI/arch.
 
 ## Running the complete test on a real NAO robot
 
