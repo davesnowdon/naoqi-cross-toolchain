@@ -1,0 +1,72 @@
+name: Build toolchain (NAOqi 2.8 / NAO V6)
+
+# Unlike the 2.1 build, this one needs NO vendored blob: the build sysroot is
+# assembled from checksum-pinned public sources (archive.debian.org). The full
+# build takes ~60-90 min on a standard runner, so it does NOT run on ordinary
+# pushes/PRs — trigger manually or by pushing a v6-* tag (which also publishes
+# a Release).
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v6-*'
+
+permissions:
+  contents: write   # attach the tarball to a Release on tag builds
+
+concurrency:
+  group: build-toolchain-2.8-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install host build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential wget xz-utils bzip2 libgmp-dev file pkg-config \
+            dpkg-dev ca-certificates
+
+      - name: Cache GNU sources
+        uses: actions/cache@v4
+        with:
+          path: naoqi-2.8/.build/src
+          key: gnu-src-2.8-${{ hashFiles('naoqi-2.8/build-toolchain.sh') }}
+
+      - name: Build and verify the toolchain
+        run: ./naoqi-2.8/build-toolchain.sh   # public sysroot, builds, packages, self-verifies
+
+      # Integration gates: the fresh toolchain must compile AND run a real
+      # program (plain_hello), and link a two-module binary with the NEW C++11
+      # ABI (the gRPC-with-NAOqi pattern; CI has no robot sysroot or target
+      # gRPC, so the demo builds+runs the all-stub variant).
+      - name: Build example programs with the toolchain
+        run: ./naoqi-2.8/examples/build-examples.sh
+
+      - name: Build the gRPC + NAOqi coexistence demo
+        run: ./naoqi-2.8/examples/build-grpc-naoqi.sh
+
+      - name: Upload toolchain artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ctc-linux64-nao6-2.8-modern
+          path: |
+            naoqi-2.8/output/*.tar.xz
+            naoqi-2.8/output/*.tar.xz.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish release (tag builds only)
+        if: startsWith(github.ref, 'refs/tags/v6-')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            naoqi-2.8/output/*.tar.xz
+            naoqi-2.8/output/*.tar.xz.sha256
+          generate_release_notes: true

@@ -111,7 +111,7 @@ protobuf is queried explicitly.
 
 There is no NAO in CI or in this dev environment, so be precise about the method:
 
-- **CI** (`build-toolchain.yml`, on dispatch / `v*` tags) builds the **all-stub**
+- **CI** (`build-toolchain-2.1.yml`, on dispatch / `v*` tags) builds the **all-stub**
   variant — no `CTC`, no `GRPC_ROOT` — links it, asserts `__cxx11 == 0`, and runs
   it. That continuously gates the **C++17↔gnu++11 old-ABI link + run** mechanic, but
   exercises neither real gRPC nor real NAOqi. (`pr-check.yml` only lints the script.)

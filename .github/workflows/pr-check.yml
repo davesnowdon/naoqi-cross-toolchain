@@ -1,8 +1,9 @@
 name: PR checks
 
-# Fast, build-free validation for pull requests (the full toolchain build lives in
-# build-toolchain.yml and runs only on demand / on v* tags). Runs in well under a
-# minute: shell syntax + shellcheck, vendored-blob checksum, and toolchain.xml.
+# Fast, build-free validation for pull requests (the full toolchain builds live
+# in build-toolchain-2.1.yml / build-toolchain-2.8.yml and run only on demand /
+# on tags). Runs in well under a minute: shell syntax + shellcheck, the 2.1
+# vendored-blob checksum, and toolchain.xml.
 on:
   pull_request:
   workflow_dispatch:
@@ -19,29 +20,53 @@ jobs:
 
       - name: Shell syntax (bash -n)
         run: |
-          bash -n build-toolchain.sh
-          bash -n tests/verify-toolchain.sh
-          bash -n examples/build-examples.sh
-          bash -n examples/build-grpc-naoqi.sh
-          bash -n examples/run.sh
+          for f in \
+            naoqi-2.1/build-toolchain.sh \
+            naoqi-2.1/tests/verify-toolchain.sh \
+            naoqi-2.1/examples/build-examples.sh \
+            naoqi-2.1/examples/build-grpc-naoqi.sh \
+            naoqi-2.1/examples/run.sh \
+            naoqi-2.8/build-toolchain.sh \
+            naoqi-2.8/tests/verify-toolchain.sh \
+            naoqi-2.8/sysroot-tools/overlay-lib.sh \
+            naoqi-2.8/sysroot-tools/fetch-build-sysroot.sh \
+            naoqi-2.8/sysroot-tools/make-robot-sysroot.sh \
+            naoqi-2.8/examples/build-examples.sh \
+            naoqi-2.8/examples/build-grpc-naoqi.sh \
+            naoqi-2.8/examples/run.sh ; do
+            bash -n "$f"
+          done
 
       - name: ShellCheck (error severity)
-        run: shellcheck -S error build-toolchain.sh tests/verify-toolchain.sh examples/build-examples.sh examples/build-grpc-naoqi.sh examples/run.sh
+        run: |
+          shellcheck -S error \
+            naoqi-2.1/build-toolchain.sh \
+            naoqi-2.1/tests/verify-toolchain.sh \
+            naoqi-2.1/examples/build-examples.sh \
+            naoqi-2.1/examples/build-grpc-naoqi.sh \
+            naoqi-2.1/examples/run.sh \
+            naoqi-2.8/build-toolchain.sh \
+            naoqi-2.8/tests/verify-toolchain.sh \
+            naoqi-2.8/sysroot-tools/fetch-build-sysroot.sh \
+            naoqi-2.8/sysroot-tools/make-robot-sysroot.sh \
+            naoqi-2.8/examples/build-examples.sh \
+            naoqi-2.8/examples/build-grpc-naoqi.sh \
+            naoqi-2.8/examples/run.sh
 
-      - name: Verify vendored blob checksum
-        working-directory: vendor
+      - name: Verify vendored blob checksum (2.1)
+        working-directory: naoqi-2.1/vendor
         run: sha256sum -c aldebaran-reuse.tar.xz.sha256
 
-      - name: Validate toolchain.xml
+      - name: Validate toolchain.xml (2.1)
         run: |
           python3 - <<'PY'
           import xml.etree.ElementTree as ET, pathlib
-          root = ET.parse('toolchain-files/toolchain.xml').getroot()
+          root = ET.parse('naoqi-2.1/toolchain-files/toolchain.xml').getroot()
           pkgs = root.findall('package')
           assert pkgs, 'no <package> entries in toolchain.xml'
           tf = pkgs[0].get('toolchain_file')
           assert tf, 'root package is missing a toolchain_file attribute'
-          p = pathlib.Path('toolchain-files') / tf
-          assert p.is_file(), f'referenced toolchain_file {tf!r} not found in toolchain-files/'
+          p = pathlib.Path('naoqi-2.1/toolchain-files') / tf
+          assert p.is_file(), f'referenced toolchain_file {tf!r} not found'
           print(f'toolchain.xml OK: {len(pkgs)} package(s), toolchain_file={tf}')
           PY
