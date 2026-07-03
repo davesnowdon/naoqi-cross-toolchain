@@ -32,6 +32,11 @@ The build sysroot is assembled from checksum-pinned Debian 10 (glibc 2.28 — th
 robot's exact version) by `sysroot-tools/fetch-build-sysroot.sh`. CI can build
 this toolchain entirely from public sources.
 
+> **Validated on hardware (2026-07-03, NAO V6 "romulus", NAOqi 2.8.7.4):**
+> `plain_hello` ran on the stock OS; `robot_info_v6` read name/version/voices via
+> the qi API; `say_hello_v6` **spoke**; and `grpc_naoqi_demo_v6` fetched phrases
+> over **gRPC 1.60** from a PC and spoke them via qi TTS — all exit 0.
+
 ## Build NAOqi 2.8 programs (needs your robot, once)
 
 ```sh

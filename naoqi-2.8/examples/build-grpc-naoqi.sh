@@ -99,4 +99,13 @@ if [ "$naoqi_real" = 0 ] && [ "$grpc_real" = 0 ] && [ "${SKIP_RUN:-0}" != 1 ]; t
   "$SYSROOT/lib/ld-linux.so.2" --library-path "$RT:$SYSROOT/lib:$SYSROOT/usr/lib" \
     "$BIN/grpc_naoqi_demo_v6" | sed 's/^/     | /'
 fi
+
+# ---- add to the deploy bundle (if build-examples.sh has assembled it) -----------
+# run.sh's `grpc` mode expects bin/grpc_naoqi_demo_v6; keep the tarball in sync.
+DEP="$HERE/deploy/nao6-modern-examples"
+if [ -d "$DEP/bin" ]; then
+  cp "$BIN/grpc_naoqi_demo_v6" "$DEP/bin/"
+  ( cd "$HERE/deploy" && tar czf nao6-modern-examples.tar.gz nao6-modern-examples )
+  echo "   added to deploy bundle: $DEP/bin/grpc_naoqi_demo_v6"
+fi
 echo "== done (NAOqi real: $naoqi_real, gRPC real: $grpc_real) -> $BIN/grpc_naoqi_demo_v6 =="

@@ -17,7 +17,7 @@ One compiler across the fleet, two configured targets:
 | NAOqi C++ API | classic proxies (`ALTextToSpeechProxy`, …) | **qi framework** (`qi::Session` / `AnyObject`) |
 | Sysroot source | vendored trimmed Aldebaran sysroot (in-repo) | **public**: Debian 10 archive + boost headers (fetched, pinned) |
 | NAOqi SDK for examples | your Aldebaran ctc (`CTC=`) | your robot rsync (`ROBOT_SYSROOT=`) |
-| Validated | ✅ on a real NAO V5 (incl. gRPC + TTS end-to-end) | ✅ built + loader-verified against a real V6 sysroot |
+| Validated | ✅ on a real NAO V5 (incl. gRPC + TTS end-to-end) | ✅ on a real NAO V6 (incl. gRPC + TTS end-to-end) |
 
 > **Yes, NAO V6 is 32-bit too.** The stock OpenNAO 2.8 userland — every NAOqi
 > library included — is i686 running on a 64-bit kernel. Only replacement runtimes
