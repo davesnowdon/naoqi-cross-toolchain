@@ -3,16 +3,14 @@ name: Build toolchain (NAOqi 2.8 / NAO V6)
 # Unlike the 2.1 build, this one needs NO vendored blob: the build sysroot is
 # assembled from checksum-pinned public sources (archive.debian.org). The full
 # build takes ~60-90 min on a standard runner, so it does NOT run on ordinary
-# pushes/PRs — trigger manually or by pushing a v6-* tag (which also publishes
-# a Release).
+# pushes/PRs — trigger manually, or push a v* tag: release.yml then runs BOTH
+# toolchain builds and attaches both archives to a single release.
 on:
   workflow_dispatch:
-  push:
-    tags:
-      - 'v6-*'
+  workflow_call:   # invoked by release.yml, which attaches both toolchains to one release
 
 permissions:
-  contents: write   # attach the tarball to a Release on tag builds
+  contents: read
 
 concurrency:
   group: build-toolchain-2.8-${{ github.ref }}
@@ -62,11 +60,3 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Publish release (tag builds only)
-        if: startsWith(github.ref, 'refs/tags/v6-')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            naoqi-2.8/output/*.tar.xz
-            naoqi-2.8/output/*.tar.xz.sha256
-          generate_release_notes: true

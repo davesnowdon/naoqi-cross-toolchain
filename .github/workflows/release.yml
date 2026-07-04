@@ -1,0 +1,79 @@
+name: Release (both toolchains)
+
+# One repo release carries BOTH toolchains: pushing a v* tag (e.g. v0.1) builds
+# the NAOqi-2.1 (NAO V4/V5) and NAOqi-2.8 (NAO V6) toolchains in parallel via
+# the reusable build workflows, renames each archive to embed the release tag,
+# and attaches both (+ sha256 files) to a single GitHub Release.
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-2-1:
+    uses: ./.github/workflows/build-toolchain-2.1.yml
+
+  build-2-8:
+    uses: ./.github/workflows/build-toolchain-2.8.yml
+
+  release:
+    needs: [build-2-1, build-2-8]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # Artifacts uploaded by the called workflows belong to this run.
+      - name: Download toolchain artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Version the archives and regenerate checksums
+        run: |
+          mkdir -p release
+          shopt -s globstar nullglob
+          for f in artifacts/**/*.tar.xz; do
+            base="$(basename "$f" .tar.xz)"
+            cp "$f" "release/${base}-${GITHUB_REF_NAME}.tar.xz"
+          done
+          cd release
+          ls *.tar.xz
+          sha256sum *.tar.xz > SHA256SUMS
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release/*.tar.xz
+            release/SHA256SUMS
+          generate_release_notes: true
+          body: |
+            Modern GCC 14.3 cross-toolchains for NAO robots — one release, both generations:
+
+            | Archive | Robots | Target |
+            |---|---|---|
+            | `ctc-linux64-atom-2.1.4.14-modern-*` | NAO V4 / V5 (NAOqi 2.1) | `i686-aldebaran-linux-gnu`, glibc 2.13, old C++ ABI, bonnell |
+            | `ctc-linux64-nao6-2.8-modern-*` | NAO V6 (NAOqi 2.8) | `i686-nao6-linux-gnu`, glibc 2.28, new C++ ABI, silvermont |
+
+            Both archives are self-contained and relocatable: unpack anywhere and use
+            `cross-config.cmake` as your `CMAKE_TOOLCHAIN_FILE`, or call
+            `cross/bin/<triple>-g++` directly. Deploy `runtime-libs/` to the robot for
+            binaries that need the newer libstdc++ (see each tree's docs).
+
+            **Source availability (GPL):** these archives contain binaries of
+            binutils 2.44, GCC 14.3.0 and glibc (2.13 for V4/V5, from the vendored
+            Aldebaran sysroot; 2.28 for V6, from Debian 10 `archive.debian.org`
+            packages), plus GCC's bundled prerequisites. Exact upstream sources are
+            pinned by checksum in `naoqi-2.1/build-toolchain.sh` and
+            `naoqi-2.8/build-toolchain.sh` at this tag, and the archives are fully
+            reproducible from this repository. glibc and libstdc++/libgcc are
+            redistributed under LGPL-2.1 / GPL with the GCC Runtime Library
+            Exception; see `naoqi-2.1/vendor/README.md` for the vendored-sysroot
+            provenance. The NAOqi SDKs are NOT included in these archives.
