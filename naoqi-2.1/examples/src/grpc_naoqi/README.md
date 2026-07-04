@@ -152,8 +152,9 @@ remaining old-kernel caveats are in [`../../docs/usage.md`](../../docs/usage.md)
 > `plain_hello` ran; `say_hello`/`robot_info` drove real NAOqi TTS + queries; and the
 > both-real `grpc_naoqi_demo` — one old-ABI binary — fetched a string from a PC over
 > modern gRPC 1.60 **on the robot's 2.6.33 kernel** and spoke it via NAOqi. The two
-> rows marked "on hardware" above are confirmed end-to-end. NAO V4 is unproven but
-> shares the ABI/arch.
+> rows marked "on hardware" above are confirmed end-to-end. **Also validated on a
+> NAO V4** ("robbie", same 2.1.4.13 firmware, 2026-07-04): plain/info/say and the
+> gRPC demo all passed — the full V4/V5 scope of this toolchain is hardware-proven.
 
 ## Running the complete test on a real NAO robot
 

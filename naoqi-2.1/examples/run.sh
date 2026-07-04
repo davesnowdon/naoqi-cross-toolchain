@@ -21,11 +21,21 @@ export LD_LIBRARY_PATH="$HERE/lib:$NAOQI_LIB:$LD_LIBRARY_PATH"
 prog="${1:-}"; [ $# -gt 0 ] && shift
 case "$prog" in
   plain|plain_hello) exec "$HERE/bin/plain_hello" "$@" ;;
-  say|say_hello)     exec "$HERE/bin/say_hello"   "$@" ;;   # [ip] [port] [text]
+  say|say_hello)
+    # say_hello's args are positional: [ip] [port] [text]. Text-first ergonomics:
+    # `./run.sh say "hello world"` — if the first arg is not IP-shaped, default
+    # to 127.0.0.1:9559 and treat ALL args as the text (otherwise the sentence
+    # ends up in the hostname slot and NAOqi tries to resolve it).
+    if [ $# -eq 0 ]; then exec "$HERE/bin/say_hello"; fi
+    case "$1" in
+      *[!0-9.]*) exec "$HERE/bin/say_hello" 127.0.0.1 9559 "$*" ;;
+      *)         exec "$HERE/bin/say_hello" "$@" ;;
+    esac ;;
   info|robot_info)   exec "$HERE/bin/robot_info"  "$@" ;;   # [ip] [port]
   *) echo "usage: $0 {plain|say|info} [args]"
-     echo "  plain             - no NAOqi; prints a line (test the toolchain runtime)"
-     echo "  say  [ip port txt]- ALTextToSpeechProxy.say  (default 127.0.0.1 9559)"
-     echo "  info [ip port]    - ALSystemProxy + TTS getters (read-only)"
+     echo "  plain               - no NAOqi; prints a line (test the toolchain runtime)"
+     echo "  say  [text]         - ALTextToSpeechProxy.say on 127.0.0.1:9559"
+     echo "  say  ip port [text] - same, explicit robot address"
+     echo "  info [ip port]      - ALSystemProxy + TTS getters (read-only)"
      exit 2 ;;
 esac
