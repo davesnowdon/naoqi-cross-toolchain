@@ -69,9 +69,10 @@ For every binary the toolchain produces:
   `libalproxies`;
 - `plain_hello` actually **executes** under the reused glibc-2.13 loader.
 
-The final robot-side confirmation (the robot speaking) was **done on a NAO V5**
-("rommie", NAOqi 2.1.4.13, 2026-07-03): `say_hello` spoke, and the `grpc_naoqi` demo
-fetched a string over modern gRPC on the robot's 2.6.33 kernel and spoke it via NAOqi
+The final robot-side confirmation (the robot speaking) was done on **both a NAO V5**
+("rommie", NAOqi 2.1.4.13, 2026-07-03) **and a NAO V4** ("robbie", same firmware,
+2026-07-04): `say_hello` spoke, and the `grpc_naoqi` demo fetched a string over
+modern gRPC on the robots' 2.6.33-era kernels and spoke it via NAOqi
 — see [`DEPLOY.md`](DEPLOY.md) to reproduce.
 
 ## CI
