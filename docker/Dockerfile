@@ -65,6 +65,27 @@ RUN curl -fsSL -o /tmp/ctc.tar.xz \
     && mkdir -p /opt/nao/ctc-2.8 \
     && tar -xJf /tmp/ctc.tar.xz -C /opt/nao/ctc-2.8 --strip-components=1 \
     && rm /tmp/ctc.tar.xz
+# The v0.1.1 archive carries absolute symlinks from its build host (glibc dev
+# links like usr/lib/libpthread.so) — they dangle here and break the -pthread
+# link test. Re-root what resolves inside the tree as RELATIVE links, prune
+# what cannot (libnss_nis* cruft whose targets never shipped). Remove this
+# step once a release built with the fixed overlay-lib.sh lands.
+RUN set -e; \
+    find /opt/nao/ctc-2.8 -type l -lname '/*' > /tmp/abslinks; \
+    while read -r l; do \
+      t="$(readlink "$l")"; \
+      rr="/opt/nao/ctc-2.8/${t#*ctc-linux64-nao6-2.8-modern/}"; \
+      if [ "$rr" != "/opt/nao/ctc-2.8/$t" ] && [ -e "$rr" ]; then :; \
+      elif [ -e "/opt/nao/ctc-2.8$t" ]; then rr="/opt/nao/ctc-2.8$t"; \
+      else echo "prune (no target in tree): $l -> $t"; rm "$l"; continue; fi; \
+      ln -sfn "$(realpath -s --relative-to="$(dirname "$l")" "$rr")" "$l"; \
+    done < /tmp/abslinks; \
+    rm /tmp/abslinks; \
+    n="$(find /opt/nao/ctc-2.8/cross/i686-nao6-linux-gnu/sysroot -xtype l | wc -l)"; \
+    if [ "$n" != 0 ]; then \
+      echo "ERROR: $n dangling symlinks remain in the sysroot:" >&2; \
+      find /opt/nao/ctc-2.8/cross/i686-nao6-linux-gnu/sysroot -xtype l >&2; exit 1; \
+    fi
 
 # ---- gRPC cross builds --------------------------------------------------------
 FROM grpc-src AS grpc-v5
