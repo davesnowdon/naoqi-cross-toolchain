@@ -72,11 +72,12 @@ jobs:
       - uses: actions/checkout@v4
       - name: proprietary overlay
         run: |
-          gh release download sdk-v1 --repo <you>/<private-assets-repo> -p 'aldebaran-*.tar.zst'
+          gh release download sdk-v1 --repo TheSocialRobot/naoqi-vendor-sdk \
+            -p 'aldebaran-ctc-2.1.4.13.tar.zst'
           mkdir -p /opt/nao/aldebaran
           tar --zstd -xf aldebaran-ctc-2.1.4.13.tar.zst -C /opt/nao/aldebaran
         env:
-          GH_TOKEN: ${{ secrets.SDK_ASSETS_TOKEN }}
+          GH_TOKEN: ${{ secrets.VENDOR_SDK_TOKEN }}
       - run: third-party/build-all.sh v5
       - run: cd client && cmake --preset v5 && cmake --build --preset v5
 ```
