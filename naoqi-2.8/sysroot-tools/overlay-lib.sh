@@ -65,10 +65,14 @@ fix_symlinks() {  # $1 = sysroot
   done
   # THEN: absolute symlinks resolve against the HOST fs at link time (e.g.
   # usr/lib/libpthread.so hitting the host's placeholder libpthread) — repoint
-  # every one whose target exists inside the sysroot.
+  # every one whose target exists inside the sysroot. The replacement must be
+  # RELATIVE: a host-absolute path ($s$tgt) resolves only on the machine that
+  # assembled the sysroot and silently breaks relocation (found the hard way
+  # when the packaged toolchain's -pthread link test failed in a container).
   while IFS= read -r l; do
     tgt=$(readlink "$l")
-    [ -e "$s$tgt" ] && ln -sfn "$s$tgt" "$l"
+    [ -e "$s$tgt" ] &&
+      ln -sfn "$(realpath -s --relative-to="$(dirname "$l")" "$s$tgt")" "$l"
   done < <(find "$s" -lname '/*')
   return 0
 }
