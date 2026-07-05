@@ -47,8 +47,8 @@ RUN build-grpc.sh host /src/grpc /opt/nao/grpc/host
 
 # ---- toolchains: released relocatable archives, checksum-pinned --------------
 FROM tools AS ctc21
-ARG TOOLCHAIN_TAG=v0.1.2
-ARG CTC21_SHA256=e58f69ec35782627c4836f0aeed736a680db5fd75cc312510846fc6cab2b556e
+ARG TOOLCHAIN_TAG=v0.1.3
+ARG CTC21_SHA256=27df16dadc93e3766b74c1fd8be9344bf2ba48dfcac11706fb74ee7073525a19
 RUN curl -fsSL -o /tmp/ctc.tar.xz \
       "https://github.com/davesnowdon/naoqi-cross-toolchain/releases/download/${TOOLCHAIN_TAG}/ctc-linux64-atom-2.1.4.14-modern-${TOOLCHAIN_TAG}.tar.xz" \
     && echo "${CTC21_SHA256}  /tmp/ctc.tar.xz" | sha256sum -c - \
@@ -62,8 +62,8 @@ RUN test "$(find /opt/nao/ctc-2.1 -type l -lname '/*' | wc -l)" = 0 \
     && test "$(find /opt/nao/ctc-2.1/cross/i686-aldebaran-linux-gnu/sysroot -xtype l | wc -l)" = 0
 
 FROM tools AS ctc28
-ARG TOOLCHAIN_TAG=v0.1.2
-ARG CTC28_SHA256=4eb3a2da579ba6914acd8770ac366cf9ef74b7e15dc74c0a183dc6f7be914cc5
+ARG TOOLCHAIN_TAG=v0.1.3
+ARG CTC28_SHA256=85bd8f1b07610089ac4a75bb41aab0f9aaebc41b1ed8dbf3ec832faa91fd6c82
 RUN curl -fsSL -o /tmp/ctc.tar.xz \
       "https://github.com/davesnowdon/naoqi-cross-toolchain/releases/download/${TOOLCHAIN_TAG}/ctc-linux64-nao6-2.8-modern-${TOOLCHAIN_TAG}.tar.xz" \
     && echo "${CTC28_SHA256}  /tmp/ctc.tar.xz" | sha256sum -c - \
