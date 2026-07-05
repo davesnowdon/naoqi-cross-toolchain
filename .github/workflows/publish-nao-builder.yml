@@ -1,0 +1,87 @@
+name: Publish nao-builder images
+
+# Builds the docker/ builder images and pushes them to
+# ghcr.io/<owner>/nao-builder:{host,2.1,2.8} plus immutable
+# :<target>-<sha7> tags. A cold build compiles gRPC three times (~2-3 h on a
+# standard runner), so it does NOT run on ordinary pushes/PRs — trigger it
+# manually after docker/ changes (Actions -> Run workflow). Re-runs are far
+# cheaper: the GitHub Actions layer cache means only stages after the edited
+# one rebuild.
+on:
+  workflow_dispatch:
+    inputs:
+      push:
+        description: "Push to GHCR (untick for a build-only validation)"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: publish-nao-builder-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    env:
+      IMAGE: ghcr.io/${{ github.repository_owner }}/nao-builder
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Short SHA
+        id: sha
+        run: echo "sha7=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      # The three targets share the expensive stages (gRPC source clone, host
+      # gRPC build) through the layer cache, so building them sequentially in
+      # one job costs little more than the slowest target alone.
+      - name: Build host image
+        uses: docker/build-push-action@v6
+        with:
+          context: docker
+          target: host
+          push: ${{ inputs.push }}
+          tags: |
+            ${{ env.IMAGE }}:host
+            ${{ env.IMAGE }}:host-${{ steps.sha.outputs.sha7 }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build nao-2.1 image
+        uses: docker/build-push-action@v6
+        with:
+          context: docker
+          target: nao-2.1
+          push: ${{ inputs.push }}
+          tags: |
+            ${{ env.IMAGE }}:2.1
+            ${{ env.IMAGE }}:2.1-${{ steps.sha.outputs.sha7 }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build nao-2.8 image
+        uses: docker/build-push-action@v6
+        with:
+          context: docker
+          target: nao-2.8
+          push: ${{ inputs.push }}
+          tags: |
+            ${{ env.IMAGE }}:2.8
+            ${{ env.IMAGE }}:2.8-${{ steps.sha.outputs.sha7 }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
