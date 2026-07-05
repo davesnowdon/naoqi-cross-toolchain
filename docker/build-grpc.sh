@@ -69,14 +69,14 @@ rm -rf "$B"
 # gRPC installs no .pc files for its bundled re2/zlib/boringssl, yet
 # grpc++.pc Requires.private's them; shim what's missing so pkg-config
 # consumers (e.g. robot-companion's TargetGrpc.cmake) resolve statically.
-if [ "$TARGET" != host ]; then
-  mkdir -p "$PREFIX/lib/pkgconfig"
-  for spec in "re2:-lre2" "zlib:-lz" "openssl:-lssl -lcrypto"; do
-    name="${spec%%:*}" libs="${spec#*:}"
-    [ -f "$PREFIX/lib/pkgconfig/$name.pc" ] && continue
-    printf 'prefix=%s\nlibdir=${prefix}/lib\nincludedir=${prefix}/include\nName: %s\nDescription: gRPC bundled dep shim\nVersion: 0\nLibs: -L${libdir} %s\nCflags: -I${includedir}\n' \
-      "$PREFIX" "$name" "$libs" > "$PREFIX/lib/pkgconfig/$name.pc"
-  done
-fi
+# ALL targets including host: on dev boxes the system dev packages mask a
+# missing host shim, in a clean container nothing does.
+mkdir -p "$PREFIX/lib/pkgconfig"
+for spec in "re2:-lre2" "zlib:-lz" "openssl:-lssl -lcrypto"; do
+  name="${spec%%:*}" libs="${spec#*:}"
+  [ -f "$PREFIX/lib/pkgconfig/$name.pc" ] && continue
+  printf 'prefix=%s\nlibdir=${prefix}/lib\nincludedir=${prefix}/include\nName: %s\nDescription: gRPC bundled dep shim\nVersion: 0\nLibs: -L${libdir} %s\nCflags: -I${includedir}\n' \
+    "$PREFIX" "$name" "$libs" > "$PREFIX/lib/pkgconfig/$name.pc"
+done
 
 echo "== gRPC $TARGET installed -> $PREFIX =="
