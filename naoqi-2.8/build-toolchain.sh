@@ -92,11 +92,16 @@ cp -P "$PREFIX/$TARGET/lib/libgcc_s.so.1"   "$OUT/runtime-libs/" 2>/dev/null || 
 rm -f "$OUT/runtime-libs/"*.py
 ls "$OUT/runtime-libs" >/dev/null
 
-msg "== [5] toolchain files + tests =="
+msg "== [5] toolchain files + tests + sysroot tools =="
 cp "$HERE/toolchain-files/"*.cmake "$OUT/"
 mkdir -p "$OUT/tests"
 cp "$HERE/tests/verify-toolchain.sh" "$OUT/tests/"
 chmod +x "$OUT/tests/verify-toolchain.sh"
+# Ship sysroot-tools so archive-only users can make a robot app sysroot
+# (make-robot-sysroot.sh) without cloning the repo.
+mkdir -p "$OUT/sysroot-tools"
+cp "$HERE/sysroot-tools/"*.sh "$OUT/sysroot-tools/"
+chmod +x "$OUT/sysroot-tools/"*.sh
 
 msg "== [6] strip host binaries =="
 find "$PREFIX/bin" "$PREFIX/libexec" -type f -perm -u+x \
