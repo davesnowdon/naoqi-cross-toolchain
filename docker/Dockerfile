@@ -45,6 +45,22 @@ RUN chmod +x /usr/local/bin/build-grpc.sh
 FROM grpc-src AS grpc-host
 RUN build-grpc.sh host /src/grpc /opt/nao/grpc/host
 
+# grpc.pc Requires.private's re2/zlib/openssl but gRPC installs no .pc for its
+# bundled copies; on dev boxes the system dev packages mask this, in the image
+# nothing does. Shim them against the prefix (which holds the bundled static
+# libs). Separate stage so fixing this never invalidates the compile caches.
+# TODO: fold into build-grpc.sh's shim loop (drop its != host condition) at
+# the next cold rebuild, e.g. the toolchain v0.1.2 bump.
+FROM grpc-host AS grpc-host-fixed
+RUN set -e; \
+    mkdir -p /opt/nao/grpc/host/lib/pkgconfig; \
+    for spec in "re2:-lre2" "zlib:-lz" "openssl:-lssl -lcrypto"; do \
+      name="${spec%%:*}"; libs="${spec#*:}"; \
+      [ -f "/opt/nao/grpc/host/lib/pkgconfig/$name.pc" ] && continue; \
+      printf 'prefix=/opt/nao/grpc/host\nlibdir=${prefix}/lib\nincludedir=${prefix}/include\nName: %s\nDescription: gRPC bundled dep shim\nVersion: 0\nLibs: -L${libdir} %s\nCflags: -I${includedir}\n' \
+        "$name" "$libs" > "/opt/nao/grpc/host/lib/pkgconfig/$name.pc"; \
+    done
+
 # ---- toolchains: released relocatable archives, checksum-pinned --------------
 FROM tools AS ctc21
 ARG TOOLCHAIN_TAG=v0.1.1
@@ -90,6 +106,8 @@ RUN set -e; \
 # ---- gRPC cross builds --------------------------------------------------------
 FROM grpc-src AS grpc-v5
 COPY --from=ctc21 /opt/nao/ctc-2.1 /opt/nao/ctc-2.1
+# plain grpc-host (not -fixed): only protoc/plugin are used here, and staying
+# on the original stage keeps the expensive cross-compile layers cache-valid
 COPY --from=grpc-host /opt/nao/grpc/host /opt/nao/grpc/host
 RUN build-grpc.sh v5 /src/grpc /opt/nao/grpc/v5
 
@@ -100,20 +118,20 @@ RUN build-grpc.sh v6 /src/grpc /opt/nao/grpc/v6
 
 # ---- final images --------------------------------------------------------------
 FROM tools AS host
-COPY --from=grpc-host /opt/nao/grpc/host /opt/nao/grpc/host
+COPY --from=grpc-host-fixed /opt/nao/grpc/host /opt/nao/grpc/host
 LABEL org.opencontainers.image.source="https://github.com/davesnowdon/naoqi-cross-toolchain" \
       org.opencontainers.image.description="NAO builder: native tools + gRPC host install (protoc, grpc_cpp_plugin)"
 
 FROM tools AS nao-2.1
 COPY --from=ctc21 /opt/nao/ctc-2.1 /opt/nao/ctc-2.1
-COPY --from=grpc-host /opt/nao/grpc/host /opt/nao/grpc/host
+COPY --from=grpc-host-fixed /opt/nao/grpc/host /opt/nao/grpc/host
 COPY --from=grpc-v5 /opt/nao/grpc/v5 /opt/nao/grpc/v5
 LABEL org.opencontainers.image.source="https://github.com/davesnowdon/naoqi-cross-toolchain" \
       org.opencontainers.image.description="NAO V4/V5 builder: ctc-2.1 (GCC 14, i686 old-ABI glibc 2.13) + gRPC 1.60. Proprietary NAOqi SDK NOT included — overlay /opt/nao/aldebaran yourself."
 
 FROM tools AS nao-2.8
 COPY --from=ctc28 /opt/nao/ctc-2.8 /opt/nao/ctc-2.8
-COPY --from=grpc-host /opt/nao/grpc/host /opt/nao/grpc/host
+COPY --from=grpc-host-fixed /opt/nao/grpc/host /opt/nao/grpc/host
 COPY --from=grpc-v6 /opt/nao/grpc/v6 /opt/nao/grpc/v6
 LABEL org.opencontainers.image.source="https://github.com/davesnowdon/naoqi-cross-toolchain" \
       org.opencontainers.image.description="NAO V6 builder: ctc-2.8 (GCC 14, i686 new-ABI glibc 2.28) + gRPC 1.60. Proprietary robot app sysroot NOT included — overlay /opt/nao/aldebaran yourself."
