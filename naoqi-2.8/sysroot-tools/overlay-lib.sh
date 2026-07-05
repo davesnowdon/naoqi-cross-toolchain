@@ -71,8 +71,17 @@ fix_symlinks() {  # $1 = sysroot
   # when the packaged toolchain's -pthread link test failed in a container).
   while IFS= read -r l; do
     tgt=$(readlink "$l")
-    [ -e "$s$tgt" ] &&
+    if [ -e "$s$tgt" ]; then
       ln -sfn "$(realpath -s --relative-to="$(dirname "$l")" "$s$tgt")" "$l"
+    else
+      # No such target anywhere in the sysroot (e.g. Debian's libnss_*/
+      # libthread_db dev links into /lib/i386-linux-gnu/ — those runtime libs
+      # live flattened in lib/). An absolute link that survives packaging is a
+      # relocation trap, so drop it — same rewrite-or-prune policy as
+      # make-symlinks-relative.sh, whose output tree passed all build gates.
+      echo "fix_symlinks: pruning unresolvable absolute link ${l#"$s"/} -> $tgt" >&2
+      rm -f "$l"
+    fi
   done < <(find "$s" -lname '/*')
   return 0
 }
