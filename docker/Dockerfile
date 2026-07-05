@@ -45,69 +45,37 @@ RUN chmod +x /usr/local/bin/build-grpc.sh
 FROM grpc-src AS grpc-host
 RUN build-grpc.sh host /src/grpc /opt/nao/grpc/host
 
-# grpc.pc Requires.private's re2/zlib/openssl but gRPC installs no .pc for its
-# bundled copies; on dev boxes the system dev packages mask this, in the image
-# nothing does. Shim them against the prefix (which holds the bundled static
-# libs). Separate stage so fixing this never invalidates the compile caches.
-# TODO: fold into build-grpc.sh's shim loop (drop its != host condition) at
-# the next cold rebuild, e.g. the toolchain v0.1.2 bump.
-FROM grpc-host AS grpc-host-fixed
-RUN set -e; \
-    mkdir -p /opt/nao/grpc/host/lib/pkgconfig; \
-    for spec in "re2:-lre2" "zlib:-lz" "openssl:-lssl -lcrypto"; do \
-      name="${spec%%:*}"; libs="${spec#*:}"; \
-      [ -f "/opt/nao/grpc/host/lib/pkgconfig/$name.pc" ] && continue; \
-      printf 'prefix=/opt/nao/grpc/host\nlibdir=${prefix}/lib\nincludedir=${prefix}/include\nName: %s\nDescription: gRPC bundled dep shim\nVersion: 0\nLibs: -L${libdir} %s\nCflags: -I${includedir}\n' \
-        "$name" "$libs" > "/opt/nao/grpc/host/lib/pkgconfig/$name.pc"; \
-    done
-
 # ---- toolchains: released relocatable archives, checksum-pinned --------------
 FROM tools AS ctc21
-ARG TOOLCHAIN_TAG=v0.1.1
-ARG CTC21_SHA256=064702305cd16e029aa6c36ab890de19145c189fd0306a6a661ea522be66d59d
+ARG TOOLCHAIN_TAG=v0.1.2
+ARG CTC21_SHA256=e58f69ec35782627c4836f0aeed736a680db5fd75cc312510846fc6cab2b556e
 RUN curl -fsSL -o /tmp/ctc.tar.xz \
       "https://github.com/davesnowdon/naoqi-cross-toolchain/releases/download/${TOOLCHAIN_TAG}/ctc-linux64-atom-2.1.4.14-modern-${TOOLCHAIN_TAG}.tar.xz" \
     && echo "${CTC21_SHA256}  /tmp/ctc.tar.xz" | sha256sum -c - \
     && mkdir -p /opt/nao/ctc-2.1 \
     && tar -xJf /tmp/ctc.tar.xz -C /opt/nao/ctc-2.1 --strip-components=1 \
     && rm /tmp/ctc.tar.xz
+# Guard the "relocatable" claim: no absolute symlinks anywhere, no dangling
+# links in the sysroot (v0.1.1 shipped host-absolute glibc dev links that
+# broke -pthread in containers; overlay-lib.sh is fixed, this keeps it fixed).
+RUN test "$(find /opt/nao/ctc-2.1 -type l -lname '/*' | wc -l)" = 0 \
+    && test "$(find /opt/nao/ctc-2.1/cross/i686-aldebaran-linux-gnu/sysroot -xtype l | wc -l)" = 0
 
 FROM tools AS ctc28
-ARG TOOLCHAIN_TAG=v0.1.1
-ARG CTC28_SHA256=02ef9b1369e8696ecdc8eaca362befccaf3a4c49ef494c23cb1632d3361e9976
+ARG TOOLCHAIN_TAG=v0.1.2
+ARG CTC28_SHA256=4eb3a2da579ba6914acd8770ac366cf9ef74b7e15dc74c0a183dc6f7be914cc5
 RUN curl -fsSL -o /tmp/ctc.tar.xz \
       "https://github.com/davesnowdon/naoqi-cross-toolchain/releases/download/${TOOLCHAIN_TAG}/ctc-linux64-nao6-2.8-modern-${TOOLCHAIN_TAG}.tar.xz" \
     && echo "${CTC28_SHA256}  /tmp/ctc.tar.xz" | sha256sum -c - \
     && mkdir -p /opt/nao/ctc-2.8 \
     && tar -xJf /tmp/ctc.tar.xz -C /opt/nao/ctc-2.8 --strip-components=1 \
     && rm /tmp/ctc.tar.xz
-# The v0.1.1 archive carries absolute symlinks from its build host (glibc dev
-# links like usr/lib/libpthread.so) — they dangle here and break the -pthread
-# link test. Re-root what resolves inside the tree as RELATIVE links, prune
-# what cannot (libnss_nis* cruft whose targets never shipped). Remove this
-# step once a release built with the fixed overlay-lib.sh lands.
-RUN set -e; \
-    find /opt/nao/ctc-2.8 -type l -lname '/*' > /tmp/abslinks; \
-    while read -r l; do \
-      t="$(readlink "$l")"; \
-      rr="/opt/nao/ctc-2.8/${t#*ctc-linux64-nao6-2.8-modern/}"; \
-      if [ "$rr" != "/opt/nao/ctc-2.8/$t" ] && [ -e "$rr" ]; then :; \
-      elif [ -e "/opt/nao/ctc-2.8$t" ]; then rr="/opt/nao/ctc-2.8$t"; \
-      else echo "prune (no target in tree): $l -> $t"; rm "$l"; continue; fi; \
-      ln -sfn "$(realpath -s --relative-to="$(dirname "$l")" "$rr")" "$l"; \
-    done < /tmp/abslinks; \
-    rm /tmp/abslinks; \
-    n="$(find /opt/nao/ctc-2.8/cross/i686-nao6-linux-gnu/sysroot -xtype l | wc -l)"; \
-    if [ "$n" != 0 ]; then \
-      echo "ERROR: $n dangling symlinks remain in the sysroot:" >&2; \
-      find /opt/nao/ctc-2.8/cross/i686-nao6-linux-gnu/sysroot -xtype l >&2; exit 1; \
-    fi
+RUN test "$(find /opt/nao/ctc-2.8 -type l -lname '/*' | wc -l)" = 0 \
+    && test "$(find /opt/nao/ctc-2.8/cross/i686-nao6-linux-gnu/sysroot -xtype l | wc -l)" = 0
 
 # ---- gRPC cross builds --------------------------------------------------------
 FROM grpc-src AS grpc-v5
 COPY --from=ctc21 /opt/nao/ctc-2.1 /opt/nao/ctc-2.1
-# plain grpc-host (not -fixed): only protoc/plugin are used here, and staying
-# on the original stage keeps the expensive cross-compile layers cache-valid
 COPY --from=grpc-host /opt/nao/grpc/host /opt/nao/grpc/host
 RUN build-grpc.sh v5 /src/grpc /opt/nao/grpc/v5
 
@@ -118,20 +86,20 @@ RUN build-grpc.sh v6 /src/grpc /opt/nao/grpc/v6
 
 # ---- final images --------------------------------------------------------------
 FROM tools AS host
-COPY --from=grpc-host-fixed /opt/nao/grpc/host /opt/nao/grpc/host
+COPY --from=grpc-host /opt/nao/grpc/host /opt/nao/grpc/host
 LABEL org.opencontainers.image.source="https://github.com/davesnowdon/naoqi-cross-toolchain" \
       org.opencontainers.image.description="NAO builder: native tools + gRPC host install (protoc, grpc_cpp_plugin)"
 
 FROM tools AS nao-2.1
 COPY --from=ctc21 /opt/nao/ctc-2.1 /opt/nao/ctc-2.1
-COPY --from=grpc-host-fixed /opt/nao/grpc/host /opt/nao/grpc/host
+COPY --from=grpc-host /opt/nao/grpc/host /opt/nao/grpc/host
 COPY --from=grpc-v5 /opt/nao/grpc/v5 /opt/nao/grpc/v5
 LABEL org.opencontainers.image.source="https://github.com/davesnowdon/naoqi-cross-toolchain" \
       org.opencontainers.image.description="NAO V4/V5 builder: ctc-2.1 (GCC 14, i686 old-ABI glibc 2.13) + gRPC 1.60. Proprietary NAOqi SDK NOT included — overlay /opt/nao/aldebaran yourself."
 
 FROM tools AS nao-2.8
 COPY --from=ctc28 /opt/nao/ctc-2.8 /opt/nao/ctc-2.8
-COPY --from=grpc-host-fixed /opt/nao/grpc/host /opt/nao/grpc/host
+COPY --from=grpc-host /opt/nao/grpc/host /opt/nao/grpc/host
 COPY --from=grpc-v6 /opt/nao/grpc/v6 /opt/nao/grpc/v6
 LABEL org.opencontainers.image.source="https://github.com/davesnowdon/naoqi-cross-toolchain" \
       org.opencontainers.image.description="NAO V6 builder: ctc-2.8 (GCC 14, i686 new-ABI glibc 2.28) + gRPC 1.60. Proprietary robot app sysroot NOT included — overlay /opt/nao/aldebaran yourself."
