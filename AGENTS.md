@@ -92,6 +92,18 @@ the documentation is frequently wrong (see *Counterintuitive facts*).
 - One tag releases **both** toolchains onto **one** release page (the repo
   versions the build system, not a robot generation).
 
+## Git workflow (required — Dave, 2026-07-06)
+
+- All new work happens on a feature branch cut from main and lands via a PR.
+  **NEVER push directly to main.** Dave reviews after each feature/milestone lands.
+- Scope work so each PR is reviewable — one feature or coherent slice per PR. If a
+  change genuinely cannot be split and will be large, check with Dave FIRST.
+- Push shape (SSH remote has no keys in the agent environment):
+  `git -c credential.helper='!gh auth git-credential' push
+  https://github.com/davesnowdon/naoqi-cross-toolchain.git <branch>`, then
+  `gh pr create`. Fetch the same way — plain `git fetch origin` fails and the
+  local `origin/main` ref goes stale.
+
 ## Repo/tooling quirks
 
 - `gh pr edit` fails on this repo (Projects-classic GraphQL deprecation) — edit
